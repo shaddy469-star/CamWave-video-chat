@@ -369,6 +369,33 @@ function greetJoiner(roomId, room, u) {
 const profiles = new Map(); // name -> { bio: '', photos: [] }
 const jukebox = new Map(); // genre -> [{ name, url }]
 ['rap','techno','country','pop','rock'].forEach(g => jukebox.set(g, []));
+// starter tracks (royalty-free placeholders — replace with your own MP3s)
+const SH = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-';
+jukebox.set('techno', [
+  { name: 'Neon Pulse (starter)', url: SH + '1.mp3' },
+  { name: 'Midnight Drive (starter)', url: SH + '2.mp3' },
+  { name: 'Electric Dreams (starter)', url: SH + '3.mp3' },
+]);
+jukebox.set('pop', [
+  { name: 'Sunshine Pop (starter)', url: SH + '4.mp3' },
+  { name: 'Feel Good (starter)', url: SH + '5.mp3' },
+  { name: 'Summer Vibes (starter)', url: SH + '6.mp3' },
+]);
+jukebox.set('rap', [
+  { name: 'Street Beat (starter)', url: SH + '7.mp3' },
+  { name: 'Urban Flow (starter)', url: SH + '8.mp3' },
+  { name: 'Block Party (starter)', url: SH + '9.mp3' },
+]);
+jukebox.set('rock', [
+  { name: 'Guitar Riff (starter)', url: SH + '10.mp3' },
+  { name: 'Amplified (starter)', url: SH + '11.mp3' },
+  { name: 'Stage Dive (starter)', url: SH + '12.mp3' },
+]);
+jukebox.set('country', [
+  { name: 'Open Road (starter)', url: SH + '13.mp3' },
+  { name: 'Barn Dance (starter)', url: SH + '14.mp3' },
+  { name: 'Dusty Trail (starter)', url: SH + '15.mp3' },
+]);
 const kickLockouts = new Map(); // name(lower) -> timestamp (2hr rejoin block)
 const restrictedUsers = new Map(); // name(lower) -> { by, ts, reason }
 function getProfile(name) {
