@@ -2811,6 +2811,29 @@ const SFX_LIST = [
   { id: 'error', icon: '⚠️', name: 'Windows Error' },
   { id: 'notify', icon: '🔔', name: 'Notification' },
   { id: 'laugh', icon: '😂', name: 'Evil Laugh' },
+  { id: 'coin', icon: '🪙', name: 'Mario Coin' },
+  { id: 'mariodeath', icon: '🍄', name: 'Mario Death' },
+  { id: 'oof', icon: '🧱', name: 'Roblox Oof' },
+  { id: 'levelup', icon: '⬆️', name: 'Level Up' },
+  { id: 'victory', icon: '🏆', name: 'Victory' },
+  { id: 'gameover', icon: '🎮', name: 'Game Over' },
+  { id: 'wasted', icon: '💀', name: 'WASTED' },
+  { id: 'missionfail', icon: '🎖️', name: 'Mission Failed' },
+  { id: 'emergency', icon: '🚨', name: 'Emergency!' },
+  { id: 'braaam', icon: '📢', name: 'BRAAAM' },
+  { id: 'dramatic', icon: '🎻', name: 'Dramatic' },
+  { id: 'failhorn', icon: '📉', name: 'Fail Horn' },
+  { id: 'boo', icon: '👎', name: 'Crowd Boo' },
+  { id: 'cheer', icon: '🎉', name: 'Crowd Cheer' },
+  { id: 'sadviolin', icon: '😢', name: 'Sad Violin' },
+  { id: 'pipe', icon: '🔩', name: 'Metal Pipe' },
+  { id: 'iphone', icon: '📱', name: 'iPhone Ding' },
+  { id: 'xp', icon: '🖥️', name: 'XP Startup' },
+  { id: 'hadouken', icon: '🔥', name: 'Hadouken' },
+  { id: 'animewow', icon: '✨', name: 'Anime Wow' },
+  { id: 'pacman', icon: '👾', name: 'Pacman Death' },
+  { id: 'creeper', icon: '💚', name: 'Creeper' },
+  { id: 'nyan', icon: '🌈', name: 'Nyan Cat' },
 ];
 $('sfx-btn').onclick = () => {
   const g = $('sfx-grid'); g.innerHTML = '';
@@ -2889,6 +2912,79 @@ function playSfx(id) {
         break;
       case 'laugh':
         for (let i = 0; i < 5; i++) osc('sawtooth', 300 - i * 20, 200 - i * 15, i * .16, .15, .3);
+        break;
+      case 'coin':
+        osc('square', 988, 988, 0, .08, .25); osc('square', 1319, 1319, .08, .3, .25);
+        break;
+      case 'mariodeath':
+        osc('square', 500, 100, 0, .5, .3); osc('square', 300, 60, .5, .5, .3);
+        break;
+      case 'oof':
+        osc('sine', 300, 120, 0, .25, .4);
+        break;
+      case 'levelup':
+        [523, 659, 784, 1047].forEach((f, i) => osc('square', f, f, i * .1, .15, .25));
+        break;
+      case 'victory':
+        [523, 523, 523, 659, 784, 1047].forEach((f, i) => osc('triangle', f, f, i * .14, .2, .35));
+        break;
+      case 'gameover':
+        [392, 370, 349, 311].forEach((f, i) => osc('triangle', f, f * .98, i * .22, .25, .35));
+        break;
+      case 'wasted':
+        osc('sine', 110, 55, 0, 1.2, .5); osc('sine', 165, 82, 0, 1.2, .3);
+        break;
+      case 'missionfail':
+        osc('square', 220, 220, 0, .3, .3); osc('square', 220, 220, .4, .3, .3); osc('square', 174, 174, .8, .6, .3);
+        break;
+      case 'emergency':
+        for (let i = 0; i < 3; i++) { osc('sawtooth', 600, 900, i * .4, .2, .3); osc('sawtooth', 900, 600, i * .4 + .2, .2, .3); }
+        break;
+      case 'braaam':
+        osc('sawtooth', 65, 60, 0, 1.5, .5); osc('sawtooth', 98, 92, 0, 1.5, .35);
+        break;
+      case 'dramatic':
+        osc('sawtooth', 146, 146, 0, .3, .35); osc('sawtooth', 146, 146, .35, .3, .35); osc('sawtooth', 220, 220, .7, .7, .4);
+        break;
+      case 'failhorn':
+        osc('sawtooth', 300, 280, 0, .25, .3); osc('sawtooth', 280, 260, .28, .25, .3);
+        osc('sawtooth', 260, 240, .56, .25, .3); osc('sawtooth', 220, 150, .84, .8, .35);
+        break;
+      case 'boo':
+        noise(0, 1.2, .3, 500); osc('sawtooth', 150, 120, 0, 1.2, .15);
+        break;
+      case 'cheer':
+        noise(0, 1.5, .35, 2000);
+        [523, 659, 784].forEach(f => osc('triangle', f, f, Math.random() * .5, .4, .15));
+        break;
+      case 'sadviolin':
+        osc('sawtooth', 440, 415, 0, .4, .25); osc('sawtooth', 415, 392, .45, .4, .25); osc('sawtooth', 392, 370, .9, .8, .25);
+        break;
+      case 'pipe': // metallic clang: inharmonic partials
+        [800, 1250, 1730, 2310].forEach(f => osc('sine', f, f * .99, 0, .8, .2));
+        noise(0, .1, .4, 5000);
+        break;
+      case 'iphone':
+        osc('sine', 1568, 1568, 0, .15, .3); osc('sine', 2093, 2093, .18, .3, .3);
+        break;
+      case 'xp':
+        [523, 659, 784, 1047, 784, 1047].forEach((f, i) => osc('sine', f, f, i * .18, .25, .3));
+        break;
+      case 'hadouken':
+        osc('sawtooth', 200, 800, 0, .4, .3); noise(.4, .3, .4, 1500); osc('sine', 100, 50, .4, .4, .5);
+        break;
+      case 'animewow':
+        [1047, 1319, 1568, 2093, 2637].forEach((f, i) => osc('sine', f, f, i * .07, .2, .25));
+        break;
+      case 'pacman':
+        for (let i = 0; i < 4; i++) osc('square', 600 - i * 100, 300 - i * 50, i * .2, .18, .25);
+        osc('square', 200, 50, .8, .5, .3);
+        break;
+      case 'creeper':
+        noise(0, .8, .25, 6000); osc('sine', 80, 40, .8, .6, .5); noise(.8, .4, .4, 800);
+        break;
+      case 'nyan':
+        [784, 988, 1175, 784, 988, 1175, 784, 659].forEach((f, i) => osc('square', f, f, i * .12, .11, .2));
         break;
     }
   } catch {}
