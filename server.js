@@ -920,11 +920,15 @@ function handleModAction(actor, msg) {
   const target = users.get(msg.targetId);
   const actorRank = rankOf(room, actor.id);
 
-  const needRank = { mute: 1, unmute: 1, kick: 1, warn: 1, ban: 2, ipban: 2, unban: 2,
-                     'promote-mod': 3, 'promote-admin': 3, demote: 3 }[msg.action];
-  if (needRank == null) return send(actor.ws, { type: 'error', message: 'Unknown mod action.' });
-  if (actorRank < needRank)
-    return send(actor.ws, { type: 'error', message: 'You do not have permission for that.' });
+  // self-unmute is always allowed (no staff rank needed)
+  const isSelfUnmute = msg.action === 'unmute' && target && target.id === actor.id;
+  if (!isSelfUnmute) {
+    const needRank = { mute: 1, unmute: 1, kick: 1, warn: 1, ban: 2, ipban: 2, unban: 2,
+                       'promote-mod': 3, 'promote-admin': 3, demote: 3 }[msg.action];
+    if (needRank == null) return send(actor.ws, { type: 'error', message: 'Unknown mod action.' });
+    if (actorRank < needRank)
+      return send(actor.ws, { type: 'error', message: 'You do not have permission for that.' });
+  }
 
   if (msg.action === 'unban') {
     // targetId here is the banned user id, or g:<name> / gip:<ip> for persistent global bans
@@ -971,7 +975,8 @@ function handleModAction(actor, msg) {
   if (target.id === actor.id && msg.action !== 'unmute')
     return send(actor.ws, { type: 'error', message: 'You cannot moderate yourself.' });
   const targetRank = rankOf(room, target.id);
-  if (targetRank >= actorRank)
+  // self-unmute is always allowed; moderating others requires outranking them
+  if (target.id !== actor.id && targetRank >= actorRank)
     return send(actor.ws, { type: 'error', message: 'You cannot moderate someone at or above your rank.' });
 
   switch (msg.action) {
@@ -1595,7 +1600,7 @@ function joinRoom(u, roomId) {
     room.ownerId = u.id;
     send(u.ws, { type: 'notice', text: `You are now the owner of "${room.name}".` });
   }
-  u.muted = !room.settings.openMic; // PTT rooms start muted
+  u.muted = !room.settings.openMic && !u.siteOwner; // PTT rooms start muted — except the site owner
   u.videoOn = false;
   u.talking = false;
   u.micLive = false;
