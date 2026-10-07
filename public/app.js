@@ -211,7 +211,12 @@ function onServer(m) {
       S.selfMuted = false; renderUserList();
       toast('🔊 Unmuted by ' + m.by + ' — you may talk now'); break;
     case 'talk-timer': startTalkCountdown(m.limitSec); break;
-    case 'sfx': { playSfx(m.id); const fx = SFX_LIST.find(f => f.id === m.id); if (fx) toast(`${fx.icon} ${m.by} played ${fx.name}`); break; }
+    case 'sfx': {
+      playSfx(m.id);
+      const fx = SFX_LIST.find(f => f.id === m.id);
+      if (fx) addSysMsg(`${fx.icon} <b>${esc(m.by)}</b> played <b>${fx.name}</b> ${fx.icon}`);
+      break;
+    }
     case 'jukebox-updated': jbPlaylists = m.playlists || {}; if (!$('jukebox-modal').classList.contains('hidden')) renderJukebox(); break;
   case 'talk-timeout':
       setMicEnabled(false, true); toast(`⏱ Talk time limit (${m.limitSec}s) reached — mic auto-muted`); break;
