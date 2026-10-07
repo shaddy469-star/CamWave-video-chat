@@ -288,6 +288,7 @@ async function handleStripeWebhook(req, res) {
 const BOT_TRIVIA = '🎲 TriviaBot';
 const BOT_HYPE = '🔥 HypeBot';
 const BOT_RIZZ = '🤖 RizzBot';
+const BOT_TEASE = '💋 TeaseBot';
 const RIZZ_LINES = [
   'Smooth. Real smooth. 😎',
   'The rizz is strong with this one.',
@@ -467,6 +468,86 @@ async function hypeFact(roomId) {
   } catch {}
   botSay(roomId, BOT_HYPE, '🧠 Random fact: Honey never spoils — archaeologists have tasted 3,000-year-old honey!');
 }
+
+/* ---- TeaseBot: keeps the tension alive in adult rooms ---- */
+const TEASE_FACTS = [
+  '💋 Fact: the brain is the biggest erogenous zone — anticipation and imagination do more than touch alone.',
+  '💋 Fact: eye contact during conversation raises heart rate and attraction — hold that gaze a little longer.',
+  '💋 Fact: a slow whisper near the ear triggers shivers because the skin there is extra sensitive.',
+  '💋 Fact: dancing together syncs heartbeats — rhythm is nature\'s flirting.',
+  '💋 Fact: the scent of vanilla and cinnamon is linked to arousal in studies — sweet really is sexy.',
+  '💋 Fact: laughter releases the same feel-good chemicals as intimacy — make them laugh first.',
+  '💋 Fact: a light touch on the forearm builds more tension than a hug — restraint is seductive.',
+  '💋 Fact: people find a slightly husky voice more attractive — speak low and slow.',
+  '💋 Fact: the neck and collarbone have some of the thinnest, most sensitive skin on the body.',
+  '💋 Fact: anticipation amplifies pleasure — the tease is half the thrill.',
+  '💋 Fact: warm hands feel better than cold ones — temperature matters more than pressure.',
+  '💋 Fact: compliments about effort ("you look amazing tonight") land harder than generic ones.',
+  '💋 Fact: mirroring someone\'s body language builds subconscious attraction fast.',
+  '💋 Fact: the lower back is packed with nerve endings — a guiding hand there says everything.',
+  '💋 Fact: slow dancing closeness raises oxytocin — the bonding hormone.',
+  '💋 Fact: biting your lip while listening is a universal signal of interest.',
+  '💋 Fact: a hand lingering one second too long on a shoulder speaks volumes.',
+  '💋 Fact: sharing a secret — even a small one — creates instant intimacy.',
+  '💋 Fact: the inner wrist is surprisingly sensitive — a fingertip trace there is electric.',
+  '💋 Fact: confidence is the most attractive trait across every study ever done. Own the room.',
+  '💋 Fact: a genuine smile reaches the eyes — and eyes never lie about desire.',
+  '💋 Fact: slow, deliberate movements are read as confident and magnetic.',
+  '💋 Fact: the best seduction is making someone feel like the only person in the room.',
+  '💋 Fact: a well-timed pause in conversation builds more tension than any pickup line.',
+];
+const TEASE_TIPS = [
+  '💡 Tip: start with the safe zones — hands, arms, shoulders — and let tension build before going further.',
+  '💡 Tip: ask what they like. Confidence + curiosity is irresistible.',
+  '💡 Tip: vary your rhythm — slow, then slower, then a surprise. Predictability kills tension.',
+  '💡 Tip: use your voice — a low compliment whispered beats any grand gesture.',
+  '💡 Tip: the best foreplay starts hours earlier — with texts, glances, and little teases.',
+  '💡 Tip: pay attention to breathing — when it quickens, you\'re doing it right. When it slows, change it up.',
+  '💡 Tip: fingertips > palms. Light touch awakens nerves; heavy touch dulls them.',
+  '💡 Tip: don\'t rush. The slower you go, the more every second counts.',
+  '💡 Tip: eye contact + a slow smile = the oldest trick because it always works.',
+  '💡 Tip: learn their rhythm instead of imposing yours — sync up first.',
+  '💡 Tip: a little playfulness goes a long way — teasing laughter is its own kind of intimacy.',
+  '💡 Tip: warm up with a massage — shoulders first, no agenda, just attention.',
+  '💡 Tip: describe what you\'re going to do before you do it. Words are foreplay too.',
+  '💡 Tip: the ears, neck, and collarbone are the holy trinity of sensitive spots.',
+  '💡 Tip: confidence is quiet — you don\'t need to perform, just be present.',
+  '💡 Tip: leave them wanting slightly more — ending on a high note keeps the fire lit.',
+  '💡 Tip: scent matters — wear something subtle they\'ll associate with you.',
+  '💡 Tip: listen more than you talk. Being truly heard is deeply seductive.',
+  '💡 Tip: a surprise — an unexpected compliment, a spontaneous plan — reignites spark instantly.',
+  '💡 Tip: tension lives in the almost — almost touching, almost saying it. Linger there.',
+  '💡 Tip: aftercare isn\'t optional — holding close afterward deepens everything.',
+  '💡 Tip: everyone\'s map is different — explore like you\'re discovering, not assuming.',
+  '💡 Tip: dim lights, good music, no phones — atmosphere is half the seduction.',
+  '💡 Tip: the sexiest thing you can say is their name, slowly.',
+];
+const TEASE_LINES = [
+  '😈 Someone in here is blushing right now...',
+  '😈 The tension in this room is delicious.',
+  '😈 Eyes up... or maybe not. 👀',
+  '😈 Who here likes to take it slow? 🐢💋',
+  '😈 Whisper something sweet in the chat... I dare you.',
+  '😈 Confidence looks good on everyone in here tonight.',
+  '😈 That gaze you\'re giving the camera... keep it. 🔥',
+  '😈 Slow down. Savor it. What\'s the rush? ⏳💋',
+];
+function teasePost(roomId, kind) {
+  const arr = kind === 'tip' ? TEASE_TIPS : kind === 'fact' ? TEASE_FACTS : TEASE_LINES;
+  botSay(roomId, BOT_TEASE, arr[Math.floor(Math.random() * arr.length)]);
+}
+/* auto-post in adult rooms every 9 minutes while people are around */
+setInterval(() => {
+  for (const [roomId, room] of rooms) {
+    if (!ADULT_ROOM_IDS.has(roomId)) continue;
+    const humans = [...room.users].filter(id => { const u = users.get(id); return u && !u.bot; });
+    if (humans.length < 2) continue;
+    if (Math.random() < 0.5) continue; // don't spam every cycle
+    const kinds = ['fact', 'tip', 'line'];
+    teasePost(roomId, kinds[Math.floor(Math.random() * kinds.length)]);
+  }
+}, 9 * 60 * 1000);
+
 function handleBotCommand(u, text) {
   const roomId = u.roomId;
   const cmd = text.slice(1).split(' ')[0].toLowerCase();
@@ -486,7 +567,7 @@ function handleBotCommand(u, text) {
     case 'joke': hypeJoke(roomId); return true;
     case 'fact': hypeFact(roomId); return true;
     case 'bots':
-      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz line + sound 😎\n!roast [name] — savage robot diss 🔥\n!laugh — robot laugh 🤖');
+      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz line + sound 😎\n!roast [name] — savage robot diss 🔥\n!laugh — robot laugh 🤖\\n!tease — flirty line 💋\n!spicyfact — adult fact 🔥\n!spicytip — intimacy tip 💡 (adult rooms)');
       return true;
     case 'rizz':
       rizzUp(roomId);
@@ -496,6 +577,9 @@ function handleBotCommand(u, text) {
       roastUp(roomId, target);
       return true;
     }
+    case 'tease': teasePost(roomId, 'line'); return true;
+    case 'spicyfact': teasePost(roomId, 'fact'); return true;
+    case 'spicytip': teasePost(roomId, 'tip'); return true;
     case 'laugh':
       botSay(roomId, BOT_RIZZ, '🤖 HA-HA-HA-HA-HA');
       broadcastRoom(roomId, { type: 'rizz-sound', sound: 'rizzlaugh' });
