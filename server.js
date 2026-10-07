@@ -105,6 +105,24 @@ function persistBanner() {
    HypeBot: fresh content (!trending, !joke, !fact, !bots) */
 const BOT_TRIVIA = '🎲 TriviaBot';
 const BOT_HYPE = '🔥 HypeBot';
+const BOT_RIZZ = '😎 RizzBot';
+const RIZZ_LINES = [
+  'Smooth. Real smooth. 😎',
+  'The rizz is strong with this one.',
+  'Certified smooth operator 🎷',
+  'Somebody call the fire department 🔥',
+  'Rizz level: EXPERT.',
+  'That was so smooth I slipped.',
+  'Main character energy detected ✨',
+  'No notes. Perfect rizz. 💯',
+];
+const RIZZ_SOUNDS = ['airhorn', 'whistle', 'chaching', 'kiss', 'smooth'];
+function rizzUp(roomId) {
+  const line = RIZZ_LINES[Math.floor(Math.random() * RIZZ_LINES.length)];
+  const sound = RIZZ_SOUNDS[Math.floor(Math.random() * RIZZ_SOUNDS.length)];
+  botSay(roomId, BOT_RIZZ, line);
+  broadcastRoom(roomId, { type: 'rizz-sound', sound });
+}
 
 async function fetchJson(url, opts = {}, timeoutMs = 8000) {
   const ctl = new AbortController();
@@ -254,7 +272,10 @@ function handleBotCommand(u, text) {
     case 'joke': hypeJoke(roomId); return true;
     case 'fact': hypeFact(roomId); return true;
     case 'bots':
-      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact');
+      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz sound drop 😎');
+      return true;
+    case 'rizz':
+      rizzUp(roomId);
       return true;
     case 'top': {
       const top = triviaBoard();

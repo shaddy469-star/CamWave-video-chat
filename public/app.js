@@ -80,6 +80,8 @@ function onServer(m) {
       halloweenCelebration(m.winners || []); break;
     case 'spooky-sound':
       playSpookySound(m.sound); break;
+    case 'rizz-sound':
+      playRizzSound(m.sound); break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -505,6 +507,52 @@ function playSpookySound(kind) {
         tone({ type: 'triangle', f0: 700, f1: 340, dur: 2, vol: 0.1, lfoF: 6, lfoAmt: 120 });
     }
     setTimeout(() => { try { ctx.close(); } catch {} }, 4500);
+  } catch {}
+}
+
+/* ---- rizz bot sound effects ---- */
+function playRizzSound(kind) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    if (ctx.resume) ctx.resume();
+    const t = ctx.currentTime, out = ctx.destination;
+    function tone(type, f0, f1, t0, dur, vol) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t + t0);
+      if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + t0 + dur);
+      g.gain.setValueAtTime(0.0001, t + t0);
+      g.gain.exponentialRampToValueAtTime(vol, t + t0 + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + t0 + dur);
+      o.connect(g); g.connect(out);
+      o.start(t + t0); o.stop(t + t0 + dur + 0.1);
+    }
+    switch (kind) {
+      case 'airhorn': // classic hype horn
+        [466, 471, 461].forEach(f => tone('sawtooth', f, f, 0, 1.1, 0.1));
+        tone('square', 233, 233, 0, 1.1, 0.04);
+        break;
+      case 'whistle': // wolf whistle
+        tone('sine', 700, 1400, 0, 0.35, 0.2);
+        tone('sine', 1400, 1400, 0.35, 0.12, 0.2);
+        tone('sine', 1400, 550, 0.47, 0.55, 0.2);
+        break;
+      case 'chaching': // cash register
+        tone('sine', 987.77, 987.77, 0, 0.12, 0.2);
+        tone('sine', 1318.51, 1318.51, 0.12, 0.5, 0.2);
+        break;
+      case 'kiss': // mwah!
+        tone('sine', 900, 180, 0, 0.14, 0.25);
+        break;
+      case 'smooth': // jazzy major-7th lift
+        [261.63, 329.63, 392.0, 493.88].forEach((f, i) => tone('triangle', f, f, i * 0.09, 0.7, 0.11));
+        break;
+      default:
+        [466, 471, 461].forEach(f => tone('sawtooth', f, f, 0, 1.0, 0.1));
+    }
+    setTimeout(() => { try { ctx.close(); } catch {} }, 3000);
   } catch {}
 }
 
