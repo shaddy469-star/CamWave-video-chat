@@ -183,6 +183,7 @@ function onServer(m) {
     case 'user-talking': setUserProp(m.id, 'talking', m.talking); if (typeof m.micLive === 'boolean') setUserProp(m.id, 'micLive', m.micLive); renderUserList(); updateTileStates(); break;
     case 'user-muted': setUserProp(m.id, 'muted', true); renderUserList(); break;
     case 'user-unmuted': setUserProp(m.id, 'muted', false); renderUserList(); break;
+    case 'user-unrestricted': setUserProp(m.id, 'restricted', false); renderUserList(); break;
     case 'room-roles':
       for (const u of m.users) setUserProp(u.id, 'role', u.role);
       renderUserList(); refreshModUI(); break;
@@ -221,6 +222,13 @@ function onServer(m) {
         `👢 ${m.by} drop-kicked you outta here! Go touch grass. 🌱`,
       ];
       showBlastModal('👢 KICKED', kicks[Math.floor(Math.random() * kicks.length)]);
+      break;
+    }
+    case 'kick-lockout': {
+      const hrs = Math.floor(m.mins / 60), mins = m.mins % 60;
+      const when = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      showBlastModal('⏳ CHILL OUT',
+        `You were kicked from "${esc(m.room)}" — take ${when} to relax. 🧘\n\nDon't mess with the Owner's Aura. 👑\n\nCome back calmer.`);
       break;
     }
     case 'ban-reject': {
@@ -530,7 +538,7 @@ function renderUserList() {
     (ROLE_RANK[b.role]||0) - (ROLE_RANK[a.role]||0) || a.name.localeCompare(b.name))];
   for (const u of all) {
     const row = document.createElement('div');
-    row.className = 'user-row ledger-row role-' + (u.role || 'member');
+    row.className = 'user-row ledger-row role-' + (u.role || 'member') + (u.restricted ? ' restricted-user' : '');
     const micIcon = u.muted ? '🔇' : (u.micLive ? '🎙️' : '🔈');
     const camIcon = u.videoOn ? '🎥' : '';
     const whoIcon = u.gender === 'f' ? '♀' : '♂';
@@ -538,7 +546,7 @@ function renderUserList() {
     const canMod = S.siteOwner || (ROLE_RANK[S.room.myRole]||0) >= 1;
     const clickable = canMod && u.id !== S.myId;
     row.innerHTML = `${spenderBadge(u.medal, u.photo)}<span class="dot ${u.status||'online'}"></span>
-      <span class="nm">${spenderNameBadge(u.medal)}${vipBadge(u.vip)}<b ${vipNameStyle(u.vip)}>${esc(u.name)}</b>
+      <span class="nm">${spenderNameBadge(u.medal)}${vipBadge(u.vip)}<b ${vipNameStyle(u.vip)}>${esc(u.name)}</b>${u.restricted ? ' <span class="restricted-tag">⚠️ RESTRICTED</span>' : ''}
       <span class="mic-btn${clickable ? ' clickable' : ''}" data-mic="${u.id}" title="${u.muted ? 'Muted — tap to unmute' : 'Live — tap to mute'}">${micIcon}</span>
       ${camIcon} ${u.talking ? '🟢' : ''}</span>
       <span class="who">${ageTxt}</span>
@@ -612,6 +620,7 @@ function showUserPopup(u, x, y) {
     html += `<button data-a="ban" class="danger">🚫 Ban</button>`;
     html += `<button data-a="ipban" class="danger">🚫⛔ IP-ban</button>`;
   }
+  if (u.restricted && S.siteOwner) html += `<button data-a="unrestrict">✅ Unblock user</button>`;
   if (rank >= 3) {
     html += `<button data-a="promote-mod">🔧 Make moderator</button>`;
     html += `<button data-a="promote-admin">🛡 Make admin</button>`;
@@ -634,6 +643,7 @@ document.addEventListener('click', e => {
 function userAction(a, u) {
   if (a === 'view') { spotlight(u.id); return; }
   if (a === 'profile') { openProfile(u.name, false); return; }
+  if (a === 'unrestrict') { wsSend({ type: 'moderate', action: 'unrestrict', name: u.name, roomId: S.room.id }); return; }
   if (a === 'dm') { openDm(u.id, u.name); return; }
   if (a === 'gift') { openGiftShop(u.id); return; }
   if (a === 'battle') { openBattlePicker(u); return; }

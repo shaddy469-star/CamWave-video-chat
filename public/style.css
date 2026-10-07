@@ -927,3 +927,11 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .mic-btn.clickable { cursor: pointer; padding: 4px 6px; border-radius: 8px; }
 .mic-btn.clickable:hover { background: rgba(255,255,255,.1); }
 .mic-btn.clickable:active { transform: scale(.92); }
+
+/* restricted users: noticeable orange */
+.user-row.restricted-user { border: 1px solid #ff9800; background: rgba(255,152,0,.08); }
+.user-row.restricted-user .nm b { color: #ff9800; }
+.restricted-tag {
+  background: #ff9800; color: #000; font-size: .68em; font-weight: 800;
+  border-radius: 6px; padding: 2px 6px; letter-spacing: .5px;
+}

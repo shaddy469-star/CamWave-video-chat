@@ -816,7 +816,8 @@ function rankOf(room, userId) { return ROLE_RANK[roleOf(room, userId)] ?? 0; }
 function publicUser(u) {
   return { id: u.id, name: u.name, gender: u.gender, age: u.age, status: u.status, muted: !!u.muted,
            micLive: !!u.micLive, videoOn: !!u.videoOn, talking: !!u.talking, photo: u.photo || null,
-           sharingScreen: !!u.sharingScreen, medal: spenderMedal(u.name), vip: vipOf(u.name) };
+           sharingScreen: !!u.sharingScreen, medal: spenderMedal(u.name), vip: vipOf(u.name),
+           restricted: !!u.restricted };
 }
 function roomSummary(r) {
   let count = 0;
@@ -2130,6 +2131,17 @@ server.listen(PORT, () => {
   console.log(`CamWave listening on port ${PORT}`);
   loadPersistedBans();
 loadPersistedProfiles();
+(async () => {
+  if (!persistOn) return;
+  try {
+    const names = await upstash('SMEMBERS', 'camwave:restricted-list');
+    for (const n of (names || [])) {
+      const j = await upstash('GET', 'camwave:restricted:' + n);
+      if (j) { try { restrictedUsers.set(n, JSON.parse(j)); } catch {} }
+    }
+    console.log('restricted users loaded:', restrictedUsers.size);
+  } catch (e) { console.warn('restricted load:', e.message); }
+})();
   loadSiteBanner();
   loadTriviaScores();
   loadCoins();
