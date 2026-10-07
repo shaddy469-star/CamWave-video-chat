@@ -56,6 +56,7 @@ function onServer(m) {
       $('app').classList.remove('hidden');
       $('my-name').textContent = m.name;
       $('siteowner-btn').classList.toggle('hidden', !S.siteOwner);
+      const sfxBtn = $('sfx-btn'); if (sfxBtn) sfxBtn.classList.toggle('hidden', !S.siteOwner);
       updateCoinDisplay();
       if (m.siteBanner && !S._welcomed) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
       if (m.triviaBoard) { S.triviaBoard = m.triviaBoard; renderTriviaBoard(); }

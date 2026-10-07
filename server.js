@@ -1977,6 +1977,8 @@ function handleMessage(ws, raw) {
       break;
     }
     case 'sfx': {
+      if (!u.siteOwner)
+        return send(ws, { type: 'error', message: 'Only the owner controls the soundboard. \ud83d\udc51' });
       // broadcast sound effect to room (rate-limited)
       const now = Date.now();
       if (u.lastSfx && now - u.lastSfx < 1500)
