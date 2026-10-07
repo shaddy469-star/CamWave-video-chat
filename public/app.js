@@ -2848,7 +2848,20 @@ $('sfx-btn').onclick = () => {
 };
 $('sfx-close').onclick = () => $('sfx-modal').classList.add('hidden');
 
+const SFX_FILES = { fart:1, boom:1, animewow:1, error:1, laugh:1, oof:1, bruh:1, pipe:1, coin:1, airhorn:1, notify:1, rimshot:1, record:1, applause:1, crickets:1, trombone:1, wasted:1, emergency:1, xp:1, nyan:1, cheer:1, boo:1 };
 function playSfx(id) {
+  // real recorded sound if we have the file
+  if (SFX_FILES[id]) {
+    try {
+      const a = new Audio('/sfx/' + id + '.mp3');
+      a.volume = .8;
+      a.play().catch(() => playSfxSynth(id));
+      return;
+    } catch { /* fall through to synth */ }
+  }
+  playSfxSynth(id);
+}
+function playSfxSynth(id) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
