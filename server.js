@@ -495,6 +495,43 @@ function handleBotCommand(u, text) {
       botSay(roomId, BOT_RIZZ, '🤖 HA-HA-HA-HA-HA');
       broadcastRoom(roomId, { type: 'rizz-sound', sound: 'rizzlaugh' });
       return true;
+    case 'goal': {
+      const room = rooms.get(roomId);
+      const args = text.slice(5).trim().split(/\s+/);
+      const g = roomGoals.get(roomId);
+      if (!args[0]) {
+        botSay(roomId, '🎁 Gifts', g
+          ? `🎯 Room goal: 🪙${g.raised.toLocaleString()} / 🪙${g.target.toLocaleString()} — ${(100 * g.raised / g.target).toFixed(0)}% there! Send gifts to push it over!`
+          : 'No active gift goal. Staff: type !goal 5000 to set one!');
+        return true;
+      }
+      const isStaff = u.siteOwner || rankOf(room, u.id) >= 1;
+      if (!isStaff) { botSay(roomId, '🎁 Gifts', 'Only room staff can set a gift goal.'); return true; }
+      if (args[0].toLowerCase() === 'clear') {
+        roomGoals.delete(roomId);
+        pushGiftGoal(roomId);
+        botSay(roomId, '🎁 Gifts', '🎯 Gift goal cleared.');
+        return true;
+      }
+      const target = parseInt(args[0].replace(/[^0-9]/g, ''), 10);
+      if (!target || target < 10) { botSay(roomId, '🎁 Gifts', 'Usage: !goal 5000 (min 10 coins), !goal clear'); return true; }
+      roomGoals.set(roomId, { target, raised: 0, setBy: u.name });
+      pushGiftGoal(roomId);
+      botSay(roomId, '🎁 Gifts', `🎯 NEW ROOM GOAL: 🪙${target.toLocaleString()} in gifts! Everyone pile on — let's smash it! 🚀`);
+      return true;
+    }
+    case 'vip': {
+      const v = vipOf(u.name);
+      const next = [...VIP_TIERS].reverse().find(t => {
+        const s = giftSentStats.get(u.name.toLowerCase());
+        return (s ? s.coins : 0) < t.min;
+      });
+      botSay(roomId, '🎁 Gifts', v
+        ? `${v.icon} You're ${v.name} VIP with 🪙${v.coins.toLocaleString()} lifetime gifted!` +
+          (next ? ` Next: ${next.icon} ${next.name} at 🪙${next.min.toLocaleString()}.` : ' Max level — absolute legend. 👑')
+        : `No VIP status yet — gift 🪙100 total to hit 🥉 Bronze! ${next ? `Next: ${next.icon} ${next.name} at 🪙${next.min.toLocaleString()}.` : ''}`);
+      return true;
+    }
     case 'top': {
       const top = triviaBoard();
       botSay(roomId, BOT_TRIVIA, top.length
@@ -578,7 +615,7 @@ function rankOf(room, userId) { return ROLE_RANK[roleOf(room, userId)] ?? 0; }
 function publicUser(u) {
   return { id: u.id, name: u.name, gender: u.gender, age: u.age, status: u.status, muted: !!u.muted,
            micLive: !!u.micLive, videoOn: !!u.videoOn, talking: !!u.talking, photo: u.photo || null,
-           sharingScreen: !!u.sharingScreen, medal: spenderMedal(u.name) };
+           sharingScreen: !!u.sharingScreen, medal: spenderMedal(u.name), vip: vipOf(u.name) };
 }
 function roomSummary(r) {
   let count = 0;
@@ -662,6 +699,39 @@ function spenderMedal(name) {
   const top = topSpenders();
   const hit = top.find(t => t.name.toLowerCase() === (name || '').toLowerCase());
   return hit ? hit.medal : null;
+}
+/* ---- VIP spender tiers: status that makes spending worth it ---- */
+const VIP_TIERS = [
+  { min: 200000, name: 'Legend',  icon: '👑', color: '#ff4d6d' },
+  { min: 50000,  name: 'Diamond', icon: '💎', color: '#25f4ee' },
+  { min: 10000,  name: 'Gold',    icon: '🥇', color: '#ffd700' },
+  { min: 1000,   name: 'Silver',  icon: '🥈', color: '#c0c0c0' },
+  { min: 100,    name: 'Bronze',  icon: '🥉', color: '#e09a52' },
+];
+function vipOf(name) {
+  const s = giftSentStats.get((name || '').toLowerCase());
+  const coins = s ? s.coins : 0;
+  const tier = VIP_TIERS.find(t => coins >= t.min);
+  return tier ? { ...tier, coins } : null;
+}
+/* ---- room gift goals: collective target with progress bar ---- */
+const roomGoals = new Map(); // roomId -> { target, raised, setBy }
+function giftGoal(roomId) { return roomGoals.get(roomId) || null; }
+function pushGiftGoal(roomId) {
+  const g = roomGoals.get(roomId);
+  broadcastRoom(roomId, { type: 'gift-goal', goal: g ? { target: g.target, raised: g.raised } : null });
+}
+function addToGiftGoal(roomId, coins, senderName) {
+  const g = roomGoals.get(roomId);
+  if (!g) return;
+  g.raised += coins;
+  if (g.raised >= g.target) {
+    roomGoals.delete(roomId);
+    broadcastRoom(roomId, { type: 'gift-goal', goal: null, completed: true });
+    botSay(roomId, '🎁 Gifts', `🎯 GOAL SMASHED! ${senderName} pushed us over 🪙${g.target.toLocaleString()}! You legends! 🎉`, {});
+  } else {
+    pushGiftGoal(roomId);
+  }
 }
 function pushTopSpenders() {
   broadcastAll({ type: 'top-spenders', top: topSpenders() });
@@ -1200,7 +1270,7 @@ function handleMessage(ws, raw) {
       if (handleBattleTriviaAnswer(u.roomId, u, text)) break;
       const room = rooms.get(u.roomId);
       const payload = { type: 'chat-msg', from: u.id, name: u.name,
-        role: roleOf(room, u.id), text, ts: Date.now(), medal: spenderMedal(u.name) };
+        role: roleOf(room, u.id), text, ts: Date.now(), medal: spenderMedal(u.name), vip: vipOf(u.name) };
       addHistory(u.roomId, payload);
       broadcastRoom(u.roomId, payload);
       break;
@@ -1395,6 +1465,12 @@ function handleMessage(ws, raw) {
       send(ws, { type: 'coins', balance: newBal });
       trackGift(u.name, target.name, gift.cost);
       pushTopSpenders();
+      addToGiftGoal(u.roomId, gift.cost, u.name);
+      // whale spotlight: huge gifts put a golden frame on the gifter + bot shoutout
+      if (gift.cost >= 1000) {
+        broadcastRoom(u.roomId, { type: 'gift-spotlight', id: u.id, name: u.name, cost: gift.cost });
+        botSay(u.roomId, '🎁 Gifts', `🐋 WHALE ALERT! ${u.name} just dropped a ${gift.emoji} ${gift.name} (${gift.cost.toLocaleString()} coins)! Give it up! 👏`, {});
+      }
       const evt = { type: 'gift-event', from: u.id, fromName: u.name, to: target.id, toName: target.name,
         gift: { id: gift.id, emoji: gift.emoji, name: gift.name, cost: gift.cost, tier: giftTier(gift.cost) }, ts: Date.now() };
       broadcastRoom(u.roomId, evt);
@@ -1621,7 +1697,8 @@ function joinRoom(u, roomId) {
     room: { id: room.id, name: room.name, settings: room.settings,
             myRole: roleOf(room, u.id), dj: room.dj },
     users: others,
-    selfMuted: u.muted });
+    selfMuted: u.muted,
+    giftGoal: giftGoal(roomId) });
   send(u.ws, { type: 'room-history', messages: roomHistory.get(roomId) || [] });
   broadcastRoom(roomId, { type: 'user-joined',
     user: { ...publicUser(u), role: roleOf(room, u.id) } }, u.id);

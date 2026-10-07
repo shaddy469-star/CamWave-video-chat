@@ -78,6 +78,10 @@ function onServer(m) {
       onSpyJoined(m); break;
     case 'private-alert':
       privateAlert(m); break;
+    case 'gift-goal':
+      renderGiftGoal(m.goal, m.completed); break;
+    case 'gift-spotlight':
+      giftSpotlight(m); break;
     case 'spy-left':
       stopSpectating(); break;
     case 'spectator-joined':
@@ -344,6 +348,7 @@ function onRoomJoined(m) {
   S.room = m.room;
   S.roomUsers = new Map(m.users.map(u => [u.id, u]));
   S.selfMuted = m.selfMuted;
+  renderGiftGoal(m.giftGoal || null);
   $('view-lobby').classList.add('hidden');
   $('view-room').classList.remove('hidden');
   $('chat-log').innerHTML = '';
@@ -449,7 +454,7 @@ function renderUserList() {
     const whoIcon = u.gender === 'f' ? '♀' : '♂';
     const ageTxt = (u.age ?? '') === '' ? '' : `${whoIcon} ${u.age}`;
     row.innerHTML = `${spenderBadge(u.medal, u.photo)}<span class="dot ${u.status||'online'}"></span>
-      <span class="nm">${spenderNameBadge(u.medal)}<b>${esc(u.name)}</b> ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
+      <span class="nm">${spenderNameBadge(u.medal)}${vipBadge(u.vip)}<b ${vipNameStyle(u.vip)}>${esc(u.name)}</b> ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
       <span class="who">${ageTxt}</span>
       <span class="st">${ROLE_LABEL[u.role] || ''}</span>`;
     if (u.id !== S.myId) row.onclick = (e) => showUserPopup(u, e.clientX, e.clientY);
@@ -1208,6 +1213,46 @@ function renderTopSpenders(top) {
   }
 }
 
+/* ---- VIP tiers: status badges + name colors ---- */
+function vipBadge(vip) {
+  if (!vip) return '';
+  return `<span class="vip-badge" style="--vip-color:${vip.color}" title="${vip.icon} ${vip.name} VIP">${vip.icon} ${vip.name}</span>`;
+}
+function vipNameStyle(vip) {
+  return vip ? `style="color:${vip.color}"` : '';
+}
+
+/* ---- room gift goal progress bar ---- */
+function renderGiftGoal(goal, completed) {
+  let bar = $('gift-goal-bar');
+  if (completed) {
+    if (bar) bar.classList.add('hidden');
+    banner('🎯 GOAL SMASHED! 🎉', 'goal');
+    return;
+  }
+  if (!goal) { if (bar) bar.classList.add('hidden'); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'gift-goal-bar';
+    document.querySelector('#view-room').prepend(bar);
+  }
+  const pct = Math.min(100, 100 * goal.raised / goal.target);
+  bar.innerHTML = `<span class="gg-label">🎯 GOAL 🪙${goal.raised.toLocaleString()} / 🪙${goal.target.toLocaleString()}</span>
+    <div class="gg-track"><div class="gg-fill" style="width:${pct}%"></div></div>
+    <span class="gg-pct">${pct.toFixed(0)}%</span>`;
+  bar.classList.remove('hidden');
+}
+
+/* ---- whale spotlight: golden frame on big gifter ---- */
+function giftSpotlight(m) {
+  const tile = document.querySelector(`.video-tile[data-peer="${m.id}"]`);
+  if (tile) {
+    tile.classList.add('whale-spotlight');
+    setTimeout(() => tile.classList.remove('whale-spotlight'), 30000);
+  }
+  banner(`🐋 ${m.name} dropped 🪙${m.cost.toLocaleString()}!`, 'whale');
+}
+
 /* ---- private-session alert for the site owner ---- */
 function privateAlert(m) {
   toast(m.text);
@@ -1864,7 +1909,7 @@ function renderVideoGrid() {
     }
     let label = tile.querySelector('.video-label');
     if (!label) { label = document.createElement('div'); label.className = 'video-label'; tile.appendChild(label); }
-    label.innerHTML = `${u && u.sharingScreen ? '🖥️ ' : ''}${spenderNameBadge(u && u.medal)}${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
+    label.innerHTML = `${u && u.sharingScreen ? '🖥️ ' : ''}${spenderNameBadge(u && u.medal)}${vipBadge(u && u.vip)}<b ${vipNameStyle(u && u.vip)}>${esc(u ? u.name : id)}</b> ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
     let mic = tile.querySelector('.mic-off-icon');
     if (u && u.muted && !mic) { mic = document.createElement('div'); mic.className = 'mic-off-icon'; mic.textContent = '🔇'; tile.appendChild(mic); }
     if (u && !u.muted && mic) mic.remove();
@@ -1916,7 +1961,7 @@ function sendChat() {
 function addChatMsg(m) {
   const el = document.createElement('div');
   el.className = 'chat-msg' + (m.bot ? ' bot' : '') + (m.greeting ? ' greeting' : '');
-  el.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${spenderNameBadge(m.medal)}${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
+  el.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${spenderNameBadge(m.medal)}${vipBadge(m.vip)}<b ${vipNameStyle(m.vip)}>${esc(m.name)}</b></span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
   $('chat-log').appendChild(el);
   $('chat-log').scrollTop = 1e6;
 }
