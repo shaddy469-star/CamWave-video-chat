@@ -413,10 +413,13 @@ function halloweenCelebration(winners) {
   const pop = document.createElement('div');
   pop.className = 'spooky-pop';
   pop.textContent = '👻';
+  const winHead = document.createElement('div');
+  winHead.className = 'spooky-winner-head';
+  winHead.textContent = '🏆 WINNER 🏆';
   const txt = document.createElement('div');
   txt.className = 'spooky-text';
-  txt.textContent = `🎃 ${winners.join(', ')} got it! 🎃`;
-  ov.appendChild(pop); ov.appendChild(txt);
+  txt.textContent = `${winners.join(', ')} got it right!`;
+  ov.appendChild(pop); ov.appendChild(winHead); ov.appendChild(txt);
   const emojis = ['🎃', '👻', '🦇', '🍬', '🕷️', '💀', '🕸️'];
   for (let i = 0; i < 28; i++) {
     const s = document.createElement('span');
@@ -429,9 +432,37 @@ function halloweenCelebration(winners) {
   }
   document.body.appendChild(ov);
   playSpookySting();
+  crownWinners(winners);
   const kill = () => { if (ov.parentNode) ov.remove(); };
   ov.onclick = kill;
-  setTimeout(kill, 5200);
+  setTimeout(kill, 6000);
+}
+
+/* crown the winner's video tile so everyone sees who got it */
+const winnerCrownTimers = new Map();
+function crownWinners(winners) {
+  if (!winners.length) return;
+  for (const [id, u] of S.roomUsers) {
+    if (!winners.includes(u.name)) continue;
+    const tile = document.querySelector(`.video-tile[data-peer="${id}"]`);
+    if (!tile) continue;
+    tile.classList.add('trivia-winner');
+    let badge = tile.querySelector('.winner-crown');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'winner-crown';
+      badge.textContent = '👑';
+      badge.title = 'Trivia winner!';
+      tile.appendChild(badge);
+    }
+    clearTimeout(winnerCrownTimers.get(id));
+    winnerCrownTimers.set(id, setTimeout(() => {
+      tile.classList.remove('trivia-winner');
+      const b = tile.querySelector('.winner-crown');
+      if (b) b.remove();
+      winnerCrownTimers.delete(id);
+    }, 45000));
+  }
 }
 function playSpookySting() {
   try {
