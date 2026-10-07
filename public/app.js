@@ -303,8 +303,10 @@ function showUserPopup(u, x, y) {
   if (rank >= 2) {
     html += `<button data-a="ban" class="danger">🚫 Ban</button>`;
     html += `<button data-a="ipban" class="danger">🚫⛔ IP-ban</button>`;
+  }
+  if (rank >= 3) {
     html += `<button data-a="promote-mod">🔧 Make moderator</button>`;
-    if (rank >= 3) html += `<button data-a="promote-admin">🛡 Make admin</button>`;
+    html += `<button data-a="promote-admin">🛡 Make admin</button>`;
     if ((ROLE_RANK[u.role]||0) > 0) html += `<button data-a="demote">⬇ Demote to member</button>`;
   }
   pop.innerHTML = html;

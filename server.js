@@ -277,7 +277,7 @@ function handleModAction(actor, msg) {
   const actorRank = rankOf(room, actor.id);
 
   const needRank = { mute: 1, unmute: 1, kick: 1, warn: 1, ban: 2, ipban: 2, unban: 2,
-                     'promote-mod': 2, 'promote-admin': 3, demote: 2 }[msg.action];
+                     'promote-mod': 3, 'promote-admin': 3, demote: 3 }[msg.action];
   if (needRank == null) return send(actor.ws, { type: 'error', message: 'Unknown mod action.' });
   if (actorRank < needRank)
     return send(actor.ws, { type: 'error', message: 'You do not have permission for that.' });
