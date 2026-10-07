@@ -921,3 +921,9 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
   .media-controls { max-width: 100%; }
   .panel { max-width: 100%; overflow-x: clip; }
 }
+
+/* mic legend + clickable mic buttons */
+.mic-legend { font-size: .78em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.mic-btn.clickable { cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.mic-btn.clickable:hover { background: rgba(255,255,255,.1); }
+.mic-btn.clickable:active { transform: scale(.92); }

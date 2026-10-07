@@ -491,18 +491,36 @@ function renderUserList() {
   for (const u of all) {
     const row = document.createElement('div');
     row.className = 'user-row ledger-row role-' + (u.role || 'member');
-    const micIcon = u.muted ? '🔇' : (u.micLive ? '🎙️' : '');
+    const micIcon = u.muted ? '🔇' : (u.micLive ? '🎙️' : '🔈');
     const camIcon = u.videoOn ? '🎥' : '';
     const whoIcon = u.gender === 'f' ? '♀' : '♂';
     const ageTxt = (u.age ?? '') === '' ? '' : `${whoIcon} ${u.age}`;
+    const canMod = S.siteOwner || (ROLE_RANK[S.room.myRole]||0) >= 1;
+    const clickable = canMod && u.id !== S.myId;
     row.innerHTML = `${spenderBadge(u.medal, u.photo)}<span class="dot ${u.status||'online'}"></span>
-      <span class="nm">${spenderNameBadge(u.medal)}${vipBadge(u.vip)}<b ${vipNameStyle(u.vip)}>${esc(u.name)}</b> ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
+      <span class="nm">${spenderNameBadge(u.medal)}${vipBadge(u.vip)}<b ${vipNameStyle(u.vip)}>${esc(u.name)}</b>
+      <span class="mic-btn${clickable ? ' clickable' : ''}" data-mic="${u.id}" title="${u.muted ? 'Muted — tap to unmute' : 'Live — tap to mute'}">${micIcon}</span>
+      ${camIcon} ${u.talking ? '🟢' : ''}</span>
       <span class="who">${ageTxt}</span>
       <span class="st">${ROLE_LABEL[u.role] || ''}</span>`;
-    if (u.id !== S.myId) row.onclick = (e) => showUserPopup(u, e.clientX, e.clientY);
+    if (u.id !== S.myId) row.onclick = (e) => {
+      if (e.target.dataset.mic && clickable) { toggleUserMute(u); return; }
+      showUserPopup(u, e.clientX, e.clientY);
+    };
     else if (S.selfMuted) row.onclick = (e) => showSelfPopup(e.clientX, e.clientY);
     el.appendChild(row);
   }
+  // legend for owner/mods
+  if (S.siteOwner || (ROLE_RANK[S.room.myRole]||0) >= 1) {
+    const lg = document.createElement('div');
+    lg.className = 'mic-legend';
+    lg.innerHTML = '🔇 muted &nbsp; 🎙️ live &nbsp; 🔈 off &nbsp; <span style="color:var(--muted)">tap mic to mute/unmute</span>';
+    el.prepend(lg);
+  }
+}
+/* quick mute toggle from user list */
+function toggleUserMute(u) {
+  wsSend({ type: 'moderate', action: u.muted ? 'unmute' : 'mute', target: u.id, roomId: S.room.id });
 }
 
 function showSelfPopup(x, y) {
