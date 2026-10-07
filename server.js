@@ -1122,7 +1122,8 @@ function serveStatic(req, res) {
     let out = data;
     if (urlPath === '/index.html') out = Buffer.from(injectVersion(data.toString()));
     const headers = { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' };
-    if (req.url.includes('?v=')) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+    if (urlPath === '/index.html') headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    else if (req.url.includes('?v=')) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
     res.writeHead(200, headers);
     res.end(out);
   });
