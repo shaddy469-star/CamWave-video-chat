@@ -1967,8 +1967,9 @@ addEventListener('mouseup', pttUp);
 pttBtn.addEventListener('touchstart', pttDown, {passive:false});
 pttBtn.addEventListener('touchend', pttUp);
 addEventListener('keydown', e => {
+  const ae = document.activeElement, tag = ae ? ae.tagName : '';
   if (e.code === 'Space' && S.room && !$('view-room').classList.contains('hidden') &&
-      document.activeElement.tagName !== 'INPUT') { e.preventDefault(); pttDown(); }
+      tag !== 'INPUT' && tag !== 'TEXTAREA' && !ae.isContentEditable) { e.preventDefault(); pttDown(); }
 });
 addEventListener('keyup', e => { if (e.code === 'Space') pttUp(); });
 
