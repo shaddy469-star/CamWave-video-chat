@@ -1676,10 +1676,13 @@ const DIRECTORY_DEFS = [
   { id: 'dir-flirt', name: '💋 Flirt Zone', category: 'Lifestyle' },
   { id: 'dir-adultlounge', name: '🥂 Adult Lounge', category: 'Lifestyle' },
   { id: 'dir-masquerade', name: '🎭 Masquerade', category: 'Lifestyle' },
+  { id: 'dir-nudity', name: '🔞 Nudity Zone', category: 'Lifestyle' },
+  { id: 'dir-w4m', name: '💃 Women Seeking Men', category: 'Lifestyle' },
+  { id: 'dir-lesbian', name: '👩‍❤️‍👩 Lesbian Lounge', category: 'Lifestyle' },
   ...US_STATES.map(s => ({ id: 'dir-' + s.toLowerCase().replace(/[^a-z]/g, ''), name: '📍 ' + s, category: 'States' })),
 ];
 // rooms that get the spicy WelcomeBot intro
-const ADULT_ROOM_IDS = new Set(['dir-18plus', 'dir-swingers', 'dir-afterdark', 'dir-flirt', 'dir-adultlounge', 'dir-masquerade']);
+const ADULT_ROOM_IDS = new Set(['dir-18plus', 'dir-swingers', 'dir-afterdark', 'dir-flirt', 'dir-adultlounge', 'dir-masquerade', 'dir-nudity', 'dir-w4m', 'dir-lesbian']);
 function seedDirectoryRooms() {
   for (const d of DIRECTORY_DEFS) {
     if (rooms.has(d.id)) continue;
