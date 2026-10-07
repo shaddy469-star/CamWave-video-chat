@@ -23,6 +23,8 @@ const { WebSocketServer } = require('ws');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
+// bumped on every deploy so browsers always load the fresh app shell
+const APP_VERSION = process.env.RENDER_GIT_COMMIT ? process.env.RENDER_GIT_COMMIT.slice(0, 7) : String(Date.now());
 
 /* ------------------------------------------------------------------ */
 /* In-memory state                                                     */
@@ -914,18 +916,27 @@ function serveStatic(req, res) {
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403); res.end('forbidden'); return;
   }
+  // cache-bust the app shell: inject a version into asset URLs so updates load fresh
+  const injectVersion = (html) => html
+    .replace(/(src="\/app\.js|href="\/style\.css)(\?v=[^"]*)?"/g, '$1"')
+    .replace('src="/app.js"', `src="/app.js?v=${APP_VERSION}"`)
+    .replace('href="/style.css"', `href="/style.css?v=${APP_VERSION}"`);
   fs.readFile(filePath, (err, data) => {
     if (err) {
       // SPA fallback
       fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (e2, d2) => {
         if (e2) { res.writeHead(404); res.end('not found'); return; }
         res.writeHead(200, { 'Content-Type': MIME['.html'] });
-        res.end(d2);
+        res.end(injectVersion(d2.toString()));
       });
       return;
     }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
-    res.end(data);
+    let out = data;
+    if (urlPath === '/index.html') out = Buffer.from(injectVersion(data.toString()));
+    const headers = { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' };
+    if (req.url.includes('?v=')) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+    res.writeHead(200, headers);
+    res.end(out);
   });
 }
 
