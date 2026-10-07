@@ -2306,7 +2306,7 @@ function onDmMsg(m) {
   if (m.from === S.dmWith) { addDmMsg(m); }
   else { S.dmUnread.add(m.from); }
   updateDmBadge(); renderContacts();
-  toast('💬 DM from ' + m.fromName);
+  banner('💬 New private message');
 }
 function onDmSent(m) { if (m.to === S.dmWith) addDmMsg(m); }
 function updateDmBadge() {
