@@ -330,6 +330,16 @@ body {
 }
 .scene-default { animation: gift-pop 0.6s cubic-bezier(0.2, 2, 0.4, 1); }
 
+/* coin purchase celebration */
+.coin-burst { font-size: 7em; z-index: 2; filter: drop-shadow(0 0 30px gold); animation: coin-burst 2.2s ease-out; }
+@keyframes coin-burst {
+  0% { transform: scale(0) rotate(0); }
+  30% { transform: scale(1.6) rotate(360deg); }
+  55% { transform: scale(1.2) rotate(540deg); }
+  75% { transform: scale(1.45) rotate(660deg); }
+  100% { transform: scale(1.3) rotate(720deg); }
+}
+
 /* coin shop */
 .coin-packages { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .coin-pack {

@@ -821,10 +821,50 @@ $('buy-coins-btn').onclick = async () => {
   } catch { el.innerHTML = '<p class="fineprint">Could not load coin shop.</p>'; }
 };
 $('coin-close').onclick = () => $('coin-modal').classList.add('hidden');
-// after Stripe checkout, show confirmation
+// after Stripe checkout, show a full coin-purchase celebration
 if (new URLSearchParams(location.search).get('coins') === 'success') {
   history.replaceState(null, '', location.pathname);
-  setTimeout(() => toast('🎉 Payment complete — your coins are on the way!'), 1500);
+  setTimeout(() => coinPurchaseCelebration(), 1200);
+}
+function coinPurchaseCelebration() {
+  const ov = document.createElement('div');
+  ov.id = 'gift-overlay';
+  ov.classList.add('legendary');
+  ov.innerHTML = `<div class="legend-flash"></div>
+    <div class="coin-burst">🪙</div>
+    <div class="legend-caption">PAYMENT SUCCESSFUL!</div>
+    <div class="gift-text">Your coins are on the way ✨</div>`;
+  const bits = ['🪙', '💰', '✨', '🎉'];
+  for (let i = 0; i < 30; i++) {
+    const s = document.createElement('span');
+    s.className = 'gift-fall';
+    s.textContent = bits[Math.floor(Math.random() * bits.length)];
+    s.style.left = (Math.random() * 100) + 'vw';
+    s.style.animationDelay = (Math.random() * 1.6) + 's';
+    s.style.fontSize = (1.2 + Math.random() * 2) + 'em';
+    ov.appendChild(s);
+  }
+  document.body.appendChild(ov);
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC(); if (ctx.resume) ctx.resume();
+      const t = ctx.currentTime;
+      [880, 1174.66, 1567.98].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + i * 0.15);
+        g.gain.exponentialRampToValueAtTime(0.2, t + i * 0.15 + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.15 + 0.6);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t + i * 0.15); o.stop(t + i * 0.15 + 0.7);
+      });
+      setTimeout(() => { try { ctx.close(); } catch {} }, 2500);
+    }
+  } catch {}
+  const kill = () => { if (ov.parentNode) ov.remove(); };
+  ov.onclick = kill;
+  setTimeout(kill, 5000);
 }
 
 /* TikTok-style tiered gift animations:
