@@ -125,6 +125,7 @@
           <button id="dj-btn" class="ctl hidden" title="DJ mode">🎧 DJ</button>
           <button id="jukebox-btn" class="ctl" title="Jukebox">🎵</button>
           <button id="sfx-btn" class="ctl hidden" title="Soundboard">🔊</button>
+          <button id="studio-btn" class="ctl" title="Video Studio">🎬</button>
           <button id="sound-toggle" class="ctl" title="Join/leave sounds">🔔</button>
           <button id="gift-btn" class="ctl" title="Send gift">🎁</button>
         </div>
@@ -219,6 +220,42 @@
         <div class="row"><button id="jb-add-btn" class="btn-primary">➕ Add track</button></div>
       </div>
       <div class="row" style="margin-top:10px"><button id="jukebox-close" class="btn-ghost">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ===== VIDEO STUDIO MODAL ===== -->
+  <div id="studio-modal" class="modal hidden">
+    <div class="modal-card" style="max-width:560px">
+      <h3>🎬 Video Studio</h3>
+      <div class="row"><input type="file" id="studio-file" accept="video/*"></div>
+      <div id="studio-editor" class="hidden">
+        <canvas id="studio-canvas" style="width:100%;border-radius:10px;background:#000"></canvas>
+        <div class="row" style="margin-top:8px">
+          <button id="studio-play" class="btn-primary">▶ Preview</button>
+          <button id="studio-export" class="btn-primary">💾 Export</button>
+        </div>
+        <div style="margin-top:10px">
+          <label>✂️ Trim: <span id="studio-trim-label"></span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="range" id="studio-start" min="0" max="100" value="0" style="flex:1">
+            <input type="range" id="studio-end" min="0" max="100" value="100" style="flex:1">
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <label>📝 Text overlay</label>
+          <div class="row"><input id="studio-text" placeholder="Add text..."></div>
+        </div>
+        <div style="margin-top:8px">
+          <label>🎨 Filter</label>
+          <div id="studio-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>
+        </div>
+        <div style="margin-top:8px">
+          <label>⚡ Speed</label>
+          <div id="studio-speeds" style="display:flex;gap:6px;margin-top:4px"></div>
+        </div>
+        <div id="studio-status" style="margin-top:8px;color:var(--muted);font-size:.85em"></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button id="studio-close" class="btn-ghost">Close</button></div>
     </div>
   </div>
 

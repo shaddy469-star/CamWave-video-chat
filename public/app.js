@@ -3023,3 +3023,209 @@ function playSfxSynth(id) {
     }
   } catch {}
 }
+
+/* ============================== VIDEO STUDIO ============================== */
+const STUDIO_FILTERS = [
+  { id: 'none', name: 'Normal', css: 'none' },
+  { id: 'bw', name: 'B&W', css: 'grayscale(1)' },
+  { id: 'sepia', name: 'Vintage', css: 'sepia(.8)' },
+  { id: 'vivid', name: 'Vivid', css: 'saturate(1.8) contrast(1.2)' },
+  { id: 'cool', name: 'Cool', css: 'hue-rotate(30deg) saturate(1.3)' },
+  { id: 'warm', name: 'Warm', css: 'sepia(.4) saturate(1.4)' },
+  { id: 'invert', name: 'Trippy', css: 'invert(.9) hue-rotate(180deg)' },
+  { id: 'blur', name: 'Dreamy', css: 'blur(2px) saturate(1.5)' },
+];
+const STUDIO_SPEEDS = [0.5, 1, 1.5, 2];
+const STUDIO_EMOJIS = ['😂','🔥','💯','😍','🤯','💀','🎉','⭐','👑','💪'];
+let studio = { video: null, filter: 'none', speed: 1, playing: false, raf: null, stickers: [] };
+
+$('studio-btn').onclick = () => $('studio-modal').classList.remove('hidden');
+$('studio-close').onclick = () => { studioStop(); $('studio-modal').classList.add('hidden'); };
+
+$('studio-file').onchange = (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (f.size > 100 * 1024 * 1024) return toast('Video too big (100MB max).');
+  const url = URL.createObjectURL(f);
+  studioLoad(url);
+};
+function studioLoad(url) {
+  studioStop();
+  const v = document.createElement('video');
+  v.src = url; v.muted = false; v.playsInline = true; v.crossOrigin = 'anonymous';
+  v.onloadedmetadata = () => {
+    studio.video = v;
+    $('studio-editor').classList.remove('hidden');
+    $('studio-start').max = 100; $('studio-end').max = 100;
+    $('studio-start').value = 0; $('studio-end').value = 100;
+    studioUpdateTrimLabel();
+    studioBuildFilters(); studioBuildSpeeds(); studioBuildStickers();
+    studioDrawFrame();
+    $('studio-status').textContent = `Loaded: ${v.duration.toFixed(1)}s`;
+  };
+  v.onerror = () => toast('Could not load that video.');
+}
+function studioBuildFilters() {
+  const el = $('studio-filters'); el.innerHTML = '';
+  for (const f of STUDIO_FILTERS) {
+    const b = document.createElement('button');
+    b.className = 'btn-ghost' + (studio.filter === f.id ? ' active' : '');
+    b.textContent = f.name; b.style.fontSize = '.8em';
+    b.onclick = () => { studio.filter = f.id; studioBuildFilters(); studioDrawFrame(); };
+    el.appendChild(b);
+  }
+}
+function studioBuildSpeeds() {
+  const el = $('studio-speeds'); el.innerHTML = '';
+  for (const sp of STUDIO_SPEEDS) {
+    const b = document.createElement('button');
+    b.className = 'btn-ghost' + (studio.speed === sp ? ' active' : '');
+    b.textContent = sp + 'x'; b.style.fontSize = '.8em';
+    b.onclick = () => { studio.speed = sp; studioBuildSpeeds(); };
+    el.appendChild(b);
+  }
+}
+function studioBuildStickers() {
+  let wrap = $('studio-stickers');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'studio-stickers';
+    wrap.innerHTML = '<label>😎 Stickers (tap to add)</label><div id="studio-sticker-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px"></div>';
+    $('studio-speeds').parentElement.after(wrap);
+  }
+  const row = $('studio-sticker-row'); row.innerHTML = '';
+  for (const em of STUDIO_EMOJIS) {
+    const b = document.createElement('button');
+    b.className = 'btn-ghost'; b.textContent = em; b.style.fontSize = '1.4em';
+    b.onclick = () => {
+      studio.stickers.push({ emoji: em, x: .5 + (Math.random() - .5) * .4, y: .3 + Math.random() * .4, size: 60 });
+      studioDrawFrame();
+    };
+    row.appendChild(b);
+  }
+  const clr = document.createElement('button');
+  clr.className = 'btn-ghost'; clr.textContent = '🗑️ Clear'; clr.style.fontSize = '.8em';
+  clr.onclick = () => { studio.stickers = []; studioDrawFrame(); };
+  row.appendChild(clr);
+}
+function studioTrimRange() {
+  const v = studio.video;
+  if (!v) return [0, 0];
+  const s = $('studio-start').value / 100 * v.duration;
+  const e = $('studio-end').value / 100 * v.duration;
+  return [Math.min(s, e), Math.max(s, e)];
+}
+function studioUpdateTrimLabel() {
+  const [s, e] = studioTrimRange();
+  $('studio-trim-label').textContent = `${s.toFixed(1)}s → ${e.toFixed(1)}s`;
+}
+$('studio-start').oninput = $('studio-end').oninput = () => { studioUpdateTrimLabel(); studioDrawFrame(); };
+$('studio-text').oninput = () => studioDrawFrame();
+function studioDrawFrame() {
+  const v = studio.video;
+  if (!v) return;
+  const cv = $('studio-canvas'), ctx = cv.getContext('2d');
+  cv.width = v.videoWidth || 640; cv.height = v.videoHeight || 360;
+  const f = STUDIO_FILTERS.find(x => x.id === studio.filter);
+  ctx.filter = f ? f.css : 'none';
+  const [s] = studioTrimRange();
+  if (!studio.playing) { try { v.currentTime = Math.min(s, v.duration - .1); } catch {} }
+  ctx.drawImage(v, 0, 0, cv.width, cv.height);
+  ctx.filter = 'none';
+  // text overlay
+  const txt = $('studio-text').value;
+  if (txt) {
+    ctx.font = `bold ${Math.floor(cv.height / 12)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
+    ctx.strokeText(txt, cv.width / 2, cv.height * .88);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(txt, cv.width / 2, cv.height * .88);
+  }
+  // stickers
+  ctx.textAlign = 'center';
+  for (const st of studio.stickers) {
+    ctx.font = `${st.size}px sans-serif`;
+    ctx.fillText(st.emoji, st.x * cv.width, st.y * cv.height);
+  }
+}
+$('studio-play').onclick = () => {
+  const v = studio.video;
+  if (!v) return;
+  if (studio.playing) { studioStop(); $('studio-play').textContent = '▶ Preview'; return; }
+  const [s, e] = studioTrimRange();
+  v.currentTime = s; v.playbackRate = studio.speed;
+  v.play().then(() => {
+    studio.playing = true;
+    $('studio-play').textContent = '⏸ Stop';
+    const loop = () => {
+      if (!studio.playing) return;
+      if (v.currentTime >= e || v.ended) { studioStop(); $('studio-play').textContent = '▶ Preview'; return; }
+      studioDrawFrame();
+      studio.raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }).catch(() => toast('Preview failed.'));
+};
+function studioStop() {
+  studio.playing = false;
+  if (studio.raf) cancelAnimationFrame(studio.raf);
+  if (studio.video) try { studio.video.pause(); } catch {}
+}
+$('studio-export').onclick = async () => {
+  const v = studio.video;
+  if (!v) return;
+  const [s, e] = studioTrimRange();
+  const dur = (e - s) / studio.speed;
+  if (dur <= 0 || dur > 60) return toast('Trim to 60 seconds or less.');
+  $('studio-status').textContent = '⏳ Exporting...';
+  $('studio-export').disabled = true;
+  try {
+    const cv = $('studio-canvas');
+    const stream = cv.captureStream(30);
+    // capture audio too
+    let combined = stream;
+    try {
+      const actx = new AudioContext();
+      const src = actx.createMediaElementSource(v);
+      const dest = actx.createMediaStreamDestination();
+      src.connect(dest); src.connect(actx.destination);
+      combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    } catch {}
+    const rec = new MediaRecorder(combined, { mimeType: 'video/webm' });
+    const chunks = [];
+    rec.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
+    rec.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      // share to room
+      const rd = new FileReader();
+      rd.onload = () => {
+        wsSend({ type: 'chat-media', kind: 'video', dataUrl: rd.result, roomId: S.room.id });
+        $('studio-status').textContent = '✅ Shared to room!';
+        toast('🎬 Video shared to room!');
+      };
+      rd.readAsDataURL(blob);
+      // also offer download
+      const a = document.createElement('a');
+      a.href = url; a.download = 'camwave-edit.webm';
+      a.click();
+      $('studio-export').disabled = false;
+    };
+    // play through the trim range for capture
+    v.currentTime = s; v.playbackRate = studio.speed;
+    studio.playing = true;
+    const drawLoop = () => {
+      if (!studio.playing) return;
+      if (v.currentTime >= e) { studioStop(); return; }
+      studioDrawFrame();
+      studio.raf = requestAnimationFrame(drawLoop);
+    };
+    v.play().then(() => { rec.start(); drawLoop(); });
+    const stopAt = setTimeout(() => { rec.stop(); studioStop(); }, dur * 1000 + 500);
+    rec.onstop = ((orig) => () => { clearTimeout(stopAt); orig(); })(rec.onstop);
+  } catch (err) {
+    $('studio-status').textContent = 'Export failed: ' + err.message;
+    $('studio-export').disabled = false;
+  }
+};
