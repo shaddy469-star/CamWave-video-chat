@@ -578,7 +578,7 @@ function rankOf(room, userId) { return ROLE_RANK[roleOf(room, userId)] ?? 0; }
 function publicUser(u) {
   return { id: u.id, name: u.name, gender: u.gender, age: u.age, status: u.status, muted: !!u.muted,
            micLive: !!u.micLive, videoOn: !!u.videoOn, talking: !!u.talking, photo: u.photo || null,
-           sharingScreen: !!u.sharingScreen };
+           sharingScreen: !!u.sharingScreen, medal: spenderMedal(u.name) };
 }
 function roomSummary(r) {
   let count = 0;
@@ -626,14 +626,42 @@ function trackGift(senderName, recvName, cost) {
   const sk = senderName.toLowerCase();
   const s = giftSentStats.get(sk) || { name: senderName, coins: 0, count: 0 };
   s.coins += cost; s.count++; s.name = senderName; giftSentStats.set(sk, s);
+  persistWrite(upstash('HSET', 'camwave:giftspent', sk, JSON.stringify(s)));
   const rk = recvName.toLowerCase();
   const r = giftRecvStats.get(rk) || { name: recvName, coins: 0, count: 0 };
   r.coins += cost; r.count++; r.name = recvName; giftRecvStats.set(rk, r);
+}
+async function loadGiftStats() {
+  if (!persistOn) return;
+  try {
+    const raw = await upstash('HGETALL', 'camwave:giftspent');
+    const pairs = Array.isArray(raw) ? raw : Object.entries(raw || {}).flat();
+    for (let i = 0; i + 1 < pairs.length; i += 2) {
+      try {
+        const s = JSON.parse(pairs[i + 1]);
+        if (s && s.name) giftSentStats.set(pairs[i], s);
+      } catch {}
+    }
+  } catch (e) { console.warn('giftstats load:', e.message); }
 }
 function giftLeaderboard() {
   const top = (m) => [...m.values()].sort((a, b) => b.coins - a.coins).slice(0, 10)
     .map(x => ({ name: x.name, coins: x.coins, count: x.count }));
   return { type: 'gift-leaderboard', sent: top(giftSentStats), received: top(giftRecvStats) };
+}
+/* ---- top spenders: 1st/2nd/3rd awards, floating banner in every room ---- */
+const MEDALS = ['🥇', '🥈', '🥉'];
+function topSpenders(n) {
+  return [...giftSentStats.values()].sort((a, b) => b.coins - a.coins).slice(0, n || 3)
+    .map((x, i) => ({ rank: i + 1, medal: MEDALS[i], name: x.name, coins: x.coins, count: x.count }));
+}
+function spenderMedal(name) {
+  const top = topSpenders();
+  const hit = top.find(t => t.name.toLowerCase() === (name || '').toLowerCase());
+  return hit ? hit.medal : null;
+}
+function pushTopSpenders() {
+  broadcastAll({ type: 'top-spenders', top: topSpenders() });
 }
 
 /* ---- room visit tracking: counters + visitor profiles ---- */
@@ -1064,7 +1092,7 @@ function handleMessage(ws, raw) {
       users.set(id, user);
       nameToId.set(name.toLowerCase(), id);
       send(ws, { type: 'welcome', id, name, gender, age, siteOwner: user.siteOwner, siteBanner, triviaBoard: triviaBoard(),
-        coins: ensureCoins(name), gifts: GIFTS });
+        coins: ensureCoins(name), gifts: GIFTS, topSpenders: topSpenders() });
       const daily = claimDaily(name);
       if (daily > 0) {
         const bal = addCoins(name, daily);
@@ -1160,7 +1188,7 @@ function handleMessage(ws, raw) {
       if (handleBattleTriviaAnswer(u.roomId, u, text)) break;
       const room = rooms.get(u.roomId);
       const payload = { type: 'chat-msg', from: u.id, name: u.name,
-        role: roleOf(room, u.id), text, ts: Date.now() };
+        role: roleOf(room, u.id), text, ts: Date.now(), medal: spenderMedal(u.name) };
       addHistory(u.roomId, payload);
       broadcastRoom(u.roomId, payload);
       break;
@@ -1350,6 +1378,7 @@ function handleMessage(ws, raw) {
       const newBal = addCoins(u.name, -gift.cost);
       send(ws, { type: 'coins', balance: newBal });
       trackGift(u.name, target.name, gift.cost);
+      pushTopSpenders();
       const evt = { type: 'gift-event', from: u.id, fromName: u.name, to: target.id, toName: target.name,
         gift: { id: gift.id, emoji: gift.emoji, name: gift.name, cost: gift.cost, tier: giftTier(gift.cost) }, ts: Date.now() };
       broadcastRoom(u.roomId, evt);
@@ -1667,5 +1696,6 @@ server.listen(PORT, () => {
   loadTriviaScores();
   loadCoins();
   loadVisitCounts();
+  loadGiftStats();
   seedDirectoryRooms();
 });

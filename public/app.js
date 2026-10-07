@@ -54,6 +54,7 @@ function onServer(m) {
       updateCoinDisplay();
       if (m.siteBanner) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
       if (m.triviaBoard) { S.triviaBoard = m.triviaBoard; renderTriviaBoard(); }
+      if (m.topSpenders) renderTopSpenders(m.topSpenders);
       if (pendingPhoto) { S.myPhoto = pendingPhoto; wsSend({ type: 'set-photo', dataUrl: pendingPhoto }); pendingPhoto = null; }
       wsSend({ type: 'get-contacts' });
       break;
@@ -69,6 +70,9 @@ function onServer(m) {
       break;
     case 'room-visitors':
       showRoomVisitors(m);
+      break;
+    case 'top-spenders':
+      renderTopSpenders(m.top);
       break;
     case 'spy-joined':
       onSpyJoined(m); break;
@@ -423,8 +427,8 @@ function renderUserList() {
     const camIcon = u.videoOn ? '🎥' : '';
     const whoIcon = u.gender === 'f' ? '♀' : '♂';
     const ageTxt = (u.age ?? '') === '' ? '' : `${whoIcon} ${u.age}`;
-    row.innerHTML = `<span class="dot ${u.status||'online'}"></span>
-      <span class="nm"><b>${esc(u.name)}</b> ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
+    row.innerHTML = `${spenderBadge(u.medal, u.photo)}<span class="dot ${u.status||'online'}"></span>
+      <span class="nm">${spenderNameBadge(u.medal)}<b>${esc(u.name)}</b> ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
       <span class="who">${ageTxt}</span>
       <span class="st">${ROLE_LABEL[u.role] || ''}</span>`;
     if (u.id !== S.myId) row.onclick = (e) => showUserPopup(u, e.clientX, e.clientY);
@@ -1044,6 +1048,36 @@ function endBattleUI(m) {
   setTimeout(kill, 6000);
 }
 
+/* ---- top spenders: floating 1st/2nd/3rd banner in every room ---- */
+function medalRank(medal) { return medal === '🥇' ? 1 : medal === '🥈' ? 2 : medal === '🥉' ? 3 : 0; }
+/* photo badge with medal ring — stands out like a real award */
+function spenderBadge(medal, photo, mini) {
+  const r = medalRank(medal);
+  if (!r) return '';
+  return `<span class="spender-badge rank-${r}${mini ? ' mini' : ''}"><span class="sb-photo">${photo ? `<img src="${esc(photo)}" alt="">` : '👤'}</span><i class="sb-rank">${r}</i></span>`;
+}
+/* name pill badge: "1ST", "2ND", "3RD" */
+function spenderNameBadge(medal) {
+  const r = medalRank(medal);
+  if (!r) return '';
+  const label = ['1ST', '2ND', '3RD'][r - 1];
+  return `<span class="name-badge rank-${r}">🏆 ${label}</span>`;
+}
+function renderTopSpenders(top) {
+  const html = top.length
+    ? `<span class="ts-label">🏆 TOP SPENDERS</span>` + top.map(t => {
+        const r = medalRank(t.medal);
+        return `<span class="ts-chip${r === 1 ? ' first' : ''}">${spenderBadge(t.medal, null, true)} ${esc(t.name)} <small>🪙${t.coins.toLocaleString()}</small></span>`;
+      }).join('')
+    : '';
+  for (const id of ['top-spenders-lobby', 'top-spenders-room']) {
+    const el = $(id);
+    if (!el) continue;
+    el.innerHTML = html;
+    el.classList.toggle('hidden', !top.length);
+  }
+}
+
 /* ---- room visitors ---- */
 function openRoomVisitors() {
   wsSend({ type: 'get-room-visitors' });
@@ -1646,6 +1680,14 @@ function renderVideoGrid() {
     tile.classList.toggle('role-owner', !!(u && u.role === 'owner'));
     tile.classList.toggle('role-admin', !!(u && u.role === 'admin'));
     tile.classList.toggle('role-moderator', !!(u && u.role === 'moderator'));
+    // top-spender medal frame + corner badge
+    const sr = medalRank(u && u.medal);
+    tile.classList.toggle('spender-1', sr === 1);
+    tile.classList.toggle('spender-2', sr === 2);
+    tile.classList.toggle('spender-3', sr === 3);
+    let tb = tile.querySelector('.tile-badge');
+    if (sr && !tb) { tb = document.createElement('div'); tb.className = 'tile-badge'; tile.appendChild(tb); }
+    if (tb) { if (sr) tb.innerHTML = spenderBadge(u.medal, u.photo, true); else tb.remove(); }
     if (!tile.querySelector('video') && hasVideo) {
       const v = document.createElement('video');
       v.autoplay = true; v.playsinline = true;
@@ -1666,7 +1708,7 @@ function renderVideoGrid() {
     }
     let label = tile.querySelector('.video-label');
     if (!label) { label = document.createElement('div'); label.className = 'video-label'; tile.appendChild(label); }
-    label.innerHTML = `${u && u.sharingScreen ? '🖥️ ' : ''}${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
+    label.innerHTML = `${u && u.sharingScreen ? '🖥️ ' : ''}${spenderNameBadge(u && u.medal)}${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
     let mic = tile.querySelector('.mic-off-icon');
     if (u && u.muted && !mic) { mic = document.createElement('div'); mic.className = 'mic-off-icon'; mic.textContent = '🔇'; tile.appendChild(mic); }
     if (u && !u.muted && mic) mic.remove();
@@ -1718,7 +1760,7 @@ function sendChat() {
 function addChatMsg(m) {
   const el = document.createElement('div');
   el.className = 'chat-msg' + (m.bot ? ' bot' : '') + (m.greeting ? ' greeting' : '');
-  el.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
+  el.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${spenderNameBadge(m.medal)}${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
   $('chat-log').appendChild(el);
   $('chat-log').scrollTop = 1e6;
 }
