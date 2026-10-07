@@ -55,6 +55,8 @@ function onServer(m) {
       S.siteBanner = m.banner; break;
     case 'warned':
       showWarned(m); break;
+    case 'mod-banner':
+      showModBanner(m); break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -322,11 +324,7 @@ document.addEventListener('click', e => {
 function userAction(a, u) {
   if (a === 'view') { spotlight(u.id); return; }
   if (a === 'dm') { openDm(u.id, u.name); return; }
-  if (a === 'warn') {
-    const reason = prompt(`Warn ${u.name} — reason (optional):`) || '';
-    wsSend({ type: 'mod-action', action: 'warn', targetId: u.id, roomId: S.room.id, reason: reason.slice(0, 200) });
-    return;
-  }
+  if (a === 'warn') { openWarnModal(u); return; }
   const map = { mute: u.muted ? 'unmute' : 'mute', kick: 'kick', ban: 'ban', ipban: 'ipban',
                 'promote-mod': 'promote-mod', 'promote-admin': 'promote-admin', demote: 'demote' };
   const action = map[a];
@@ -335,6 +333,49 @@ function userAction(a, u) {
     if (!confirm(`${action.toUpperCase()} ${u.name}?`)) return;
   }
   wsSend({ type: 'mod-action', action, targetId: u.id, roomId: S.room.id });
+}
+
+/* ---- warn presets (private) ---- */
+const WARN_PRESETS = [
+  '🎙️ Stop hogging the mic — let others talk.',
+  '🚫 No spamming the chat.',
+  '🤬 Watch your language.',
+  '📹 Keep your camera appropriate.',
+  '😤 Stop harassing other users.',
+  '👋 Final warning — next violation is a ban.'
+];
+let warnTarget = null;
+function openWarnModal(u) {
+  warnTarget = u;
+  $('warn-target').textContent = u.name;
+  const el = $('warn-presets'); el.innerHTML = '';
+  WARN_PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'btn-ghost warn-preset'; b.textContent = p;
+    b.onclick = () => sendWarn(p);
+    el.appendChild(b);
+  });
+  $('warn-custom').value = '';
+  $('warn-modal').classList.remove('hidden');
+}
+function sendWarn(reason) {
+  if (!warnTarget || !S.room) return;
+  wsSend({ type: 'mod-action', action: 'warn', targetId: warnTarget.id, roomId: S.room.id, reason: (reason || '').slice(0, 200) });
+  $('warn-modal').classList.add('hidden');
+  toast('⚠️ Warning sent privately to ' + warnTarget.name);
+}
+$('warn-send').onclick = () => sendWarn($('warn-custom').value.trim());
+$('warn-close').onclick = () => $('warn-modal').classList.add('hidden');
+
+/* ---- public moderation banner ---- */
+let modBannerTimer = null;
+function showModBanner(m) {
+  const el = $('mod-banner');
+  el.innerHTML = `<span>${esc(m.icon || '📢')}</span><b>${esc(m.text || '')}</b><button id="mod-banner-x" title="Dismiss">✕</button>`;
+  el.classList.remove('hidden');
+  $('mod-banner-x').onclick = () => el.classList.add('hidden');
+  clearTimeout(modBannerTimer);
+  modBannerTimer = setTimeout(() => el.classList.add('hidden'), 9000);
 }
 
 /* ============================== letterhead + warnings ============================== */

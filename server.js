@@ -332,13 +332,21 @@ function handleModAction(actor, msg) {
       target.muted = true; target.talking = false; clearTalkTimer(target);
       send(target.ws, { type: 'force-mute', by: actor.name });
       broadcastRoom(room.id, { type: 'user-muted', id: target.id, name: target.name, by: actor.name });
+      broadcastRoom(room.id, { type: 'mod-banner', icon: '🔇', text: `${target.name} was muted by ${actor.name}` });
       break;
     case 'warn': {
       const reason = String(msg.reason || '').slice(0, 200);
       target.warnCount = (target.warnCount | 0) + 1;
+      const wtext = `⚠️ Official warning from ${actor.name} (strike ${target.warnCount})${reason ? ': ' + reason : ''}`;
       send(target.ws, { type: 'warned', by: actor.name, reason, count: target.warnCount });
-      broadcastRoom(room.id, { type: 'notice',
-        text: `⚠️ ${target.name} was warned by ${actor.name}${reason ? ': ' + reason : ''} (strike ${target.warnCount})` });
+      // private DM record of the warning
+      const entry = { from: actor.id, fromName: actor.name, to: target.id, text: wtext, ts: Date.now() };
+      const k = dmKey(actor.id, target.id);
+      if (!dmHistory.has(k)) dmHistory.set(k, []);
+      const arr = dmHistory.get(k);
+      arr.push(entry); if (arr.length > 100) arr.shift();
+      send(target.ws, { type: 'dm-msg', ...entry });
+      send(actor.ws, { type: 'dm-sent', ...entry });
       break;
     }
     case 'unmute':
@@ -349,6 +357,7 @@ function handleModAction(actor, msg) {
     case 'kick': {
       send(target.ws, { type: 'kicked', by: actor.name, reason: msg.reason || '' });
       broadcastRoom(room.id, { type: 'notice', text: `${target.name} was kicked by ${actor.name}.` }, target.id);
+      broadcastRoom(room.id, { type: 'mod-banner', icon: '👢', text: `${target.name} was kicked by ${actor.name}` }, target.id);
       doLeaveRoom(target, 'kicked');
       break;
     }
@@ -369,6 +378,8 @@ function handleModAction(actor, msg) {
         message: msg.action === 'ipban' ? 'You have been IP-banned from this room.' : 'You have been banned from this room.' });
       broadcastRoom(room.id, { type: 'notice',
         text: `${target.name} was ${msg.action === 'ipban' ? 'IP-banned' : 'banned'} by ${actor.name}.` }, target.id);
+      broadcastRoom(room.id, { type: 'mod-banner', icon: '🚫',
+        text: `${target.name} was ${msg.action === 'ipban' ? 'IP-banned' : 'banned'} by ${actor.name}` }, target.id);
       doLeaveRoom(target, 'banned');
       send(actor.ws, { type: 'ban-list', bans: banList(room) });
       break;

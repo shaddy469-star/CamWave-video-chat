@@ -166,6 +166,17 @@ body {
 .modal-card.warn-card h2 { color: #e5484d; margin-top: 0; }
 #sitebanner-modal textarea { width: 100%; background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; resize: vertical; }
 #siteowner-btn { background: none; border: none; font-size: 1.2em; cursor: pointer; }
+
+/* moderation banner + warn presets */
+#mod-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: #3a2b00; border: 1px solid var(--accent); border-radius: 10px;
+  padding: 10px 14px; margin: 8px 12px 0; font-size: .95em;
+}
+#mod-banner.hidden { display: none; }
+#mod-banner button { margin-left: auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1em; }
+.warn-presets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.warn-preset { text-align: left; }
 .activity-log { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
 .activity-row { font-size: .82em; color: var(--muted); padding: 3px 8px; background: var(--bg2); border-radius: 7px; }
 .activity-row b { color: var(--text); }

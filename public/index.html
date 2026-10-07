@@ -80,6 +80,7 @@
       <span id="room-mode" class="pill"></span>
       <button id="room-settings-btn" class="btn-ghost hidden" title="Room settings">⚙️</button>
     </div>
+    <div id="mod-banner" class="hidden"></div>
 
     <div class="room-layout">
       <div class="stage-col">
@@ -194,6 +195,17 @@
       <h2>⚠️ You've been warned</h2>
       <p id="warned-text" class="lh-body"></p>
       <div class="modal-actions"><button id="warned-ok" class="btn-primary">Understood</button></div>
+    </div>
+  </div>
+
+  <!-- ===== WARN PRESETS ===== -->
+  <div id="warn-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>⚠️ Warn <span id="warn-target"></span> <span class="pill">private</span></h3>
+      <div id="warn-presets" class="warn-presets"></div>
+      <div class="row"><input id="warn-custom" placeholder="Or write a custom warning…" maxlength="200"></div>
+      <div class="row"><button id="warn-send" class="btn-primary">Send warning privately</button></div>
+      <div class="modal-actions"><button id="warn-close" class="btn-ghost">Cancel</button></div>
     </div>
   </div>
 
