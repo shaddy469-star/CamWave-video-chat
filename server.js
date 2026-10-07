@@ -596,7 +596,10 @@ function handleModAction(actor, msg) {
   }
 
   if (!target) return send(actor.ws, { type: 'error', message: 'User not found.' });
-  if (target.id === actor.id) return send(actor.ws, { type: 'error', message: 'You cannot moderate yourself.' });
+  if (target.siteOwner && target.id !== actor.id)
+    return send(actor.ws, { type: 'error', message: 'You cannot moderate the site owner.' });
+  if (target.id === actor.id && msg.action !== 'unmute')
+    return send(actor.ws, { type: 'error', message: 'You cannot moderate yourself.' });
   const targetRank = rankOf(room, target.id);
   if (targetRank >= actorRank)
     return send(actor.ws, { type: 'error', message: 'You cannot moderate someone at or above your rank.' });

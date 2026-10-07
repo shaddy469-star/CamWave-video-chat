@@ -117,8 +117,10 @@ function onServer(m) {
       { const c = S.contacts.find(x => x.id === m.id); if (c) { c.status = m.status; renderContacts(); } }
       break;
     case 'force-mute':
-      setMicEnabled(false, true); toast('🔇 Muted by ' + m.by); break;
+      S.selfMuted = true;
+      setMicEnabled(false, true); toast('🔇 Muted by ' + m.by); renderUserList(); break;
     case 'force-unmute':
+      S.selfMuted = false; renderUserList();
       toast('🔊 Unmuted by ' + m.by + ' — you may talk now'); break;
     case 'talk-timeout':
       setMicEnabled(false, true); toast(`⏱ Talk time limit (${m.limitSec}s) reached — mic auto-muted`); break;
@@ -307,8 +309,22 @@ function renderUserList() {
       <span class="who">${ageTxt}</span>
       <span class="st">${ROLE_LABEL[u.role] || ''}</span>`;
     if (u.id !== S.myId) row.onclick = (e) => showUserPopup(u, e.clientX, e.clientY);
+    else if (S.selfMuted) row.onclick = (e) => showSelfPopup(e.clientX, e.clientY);
     el.appendChild(row);
   }
+}
+
+function showSelfPopup(x, y) {
+  const pop = $('user-popup');
+  pop.innerHTML = `<div style="font-weight:700;margin-bottom:6px">You</div>
+    <button data-a="self-unmute">🔊 Unmute me</button>`;
+  pop.classList.remove('hidden');
+  pop.style.left = Math.min(x, innerWidth - 230) + 'px';
+  pop.style.top = Math.min(y, innerHeight - 320) + 'px';
+  pop.querySelector('[data-a="self-unmute"]').onclick = () => {
+    pop.classList.add('hidden');
+    wsSend({ type: 'mod-action', action: 'unmute', targetId: S.myId, roomId: S.room.id });
+  };
 }
 
 function canActOn(target) {
