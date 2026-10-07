@@ -268,7 +268,7 @@ function renderUserList() {
     (ROLE_RANK[b.role]||0) - (ROLE_RANK[a.role]||0) || a.name.localeCompare(b.name))];
   for (const u of all) {
     const row = document.createElement('div');
-    row.className = 'user-row ledger-row';
+    row.className = 'user-row ledger-row role-' + (u.role || 'member');
     const micIcon = u.muted ? '🔇' : (u.micLive ? '🎙️' : '');
     const camIcon = u.videoOn ? '🎥' : '';
     const whoIcon = u.gender === 'f' ? '♀' : '♂';
@@ -580,6 +580,9 @@ function renderVideoGrid() {
     }
     const hasVideo = peer.stream.getVideoTracks().length > 0;
     tile.classList.toggle('speaking', !!(u && u.talking));
+    tile.classList.toggle('role-owner', !!(u && u.role === 'owner'));
+    tile.classList.toggle('role-admin', !!(u && u.role === 'admin'));
+    tile.classList.toggle('role-moderator', !!(u && u.role === 'moderator'));
     if (!tile.querySelector('video') && hasVideo) {
       const v = document.createElement('video');
       v.autoplay = true; v.playsinline = true;
@@ -588,7 +591,7 @@ function renderVideoGrid() {
     }
     let label = tile.querySelector('.video-label');
     if (!label) { label = document.createElement('div'); label.className = 'video-label'; tile.appendChild(label); }
-    label.innerHTML = `${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role">${ROLE_LABEL[u.role]}</span>` : ''}`;
+    label.innerHTML = `${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
     let mic = tile.querySelector('.mic-off-icon');
     if (u && u.muted && !mic) { mic = document.createElement('div'); mic.className = 'mic-off-icon'; mic.textContent = '🔇'; tile.appendChild(mic); }
     if (u && !u.muted && mic) mic.remove();
