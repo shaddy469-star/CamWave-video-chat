@@ -82,6 +82,15 @@ function onServer(m) {
       renderGiftGoal(m.goal, m.completed); break;
     case 'gift-spotlight':
       giftSpotlight(m); break;
+    case 'cam-check-start':
+      showCamCheckBanner(false); break;
+    case 'cam-warn':
+      showCamCheckBanner(true); break;
+    case 'cam-verified': {
+      const b = $('cam-check-banner');
+      if (b) b.classList.add('hidden');
+      break;
+    }
     case 'spy-left':
       stopSpectating(); break;
     case 'spectator-joined':
@@ -1800,6 +1809,44 @@ addEventListener('keydown', e => {
       document.activeElement.tagName !== 'INPUT') { e.preventDefault(); pttDown(); }
 });
 addEventListener('keyup', e => { if (e.code === 'Space') pttUp(); });
+
+/* ---- camera brightness sampling for verification ---- */
+function sampleCamBrightness() {
+  try {
+    const v = document.querySelector('#tile-self video');
+    if (!v || !S.camOn || v.videoWidth === 0) return null;
+    const c = document.createElement('canvas');
+    c.width = 16; c.height = 16;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, 16, 16);
+    const d = ctx.getImageData(0, 0, 16, 16).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += (d[i] + d[i + 1] + d[i + 2]) / 3;
+    return sum / (d.length / 4) / 255;
+  } catch { return null; }
+}
+setInterval(() => {
+  if (!S.room || S.spectating || !S.camOn || !S.localStream) return;
+  const b = sampleCamBrightness();
+  wsSend({ type: 'media-state', videoOn: true, brightness: b == null ? 1 : b });
+}, 5000);
+
+/* ---- camera verification banners ---- */
+function showCamCheckBanner(warn) {
+  let b = $('cam-check-banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'cam-check-banner';
+    document.querySelector('#view-room').prepend(b);
+  }
+  b.innerHTML = warn
+    ? '⚠️ <b>15 SECONDS</b> — turn on your camera with the lights on or you\'ll be removed!'
+    : '📹 <b>Camera check:</b> turn on your camera (face visible, lights on) to verify. 45 seconds.';
+  b.className = warn ? 'warn' : '';
+  b.classList.remove('hidden');
+  clearTimeout(b._t);
+  if (!warn) b._t = setTimeout(() => b.classList.add('hidden'), 45000);
+}
 
 /* ============================== WebRTC mesh ============================== */
 const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };

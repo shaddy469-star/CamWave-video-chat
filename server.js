@@ -737,6 +737,31 @@ function pushTopSpenders() {
   broadcastAll({ type: 'top-spenders', top: topSpenders() });
 }
 
+/* ---- camera verification: must show face on entry ---- */
+const CAM_GRACE_MS = 45000;   // total time to get verified
+const CAM_WARN_MS = 30000;    // warning at this point
+function clearCamCheck(u) {
+  if (u.camWarnTimer) { clearTimeout(u.camWarnTimer); u.camWarnTimer = null; }
+  if (u.camKickTimer) { clearTimeout(u.camKickTimer); u.camKickTimer = null; }
+}
+function startCamCheck(u, roomId) {
+  clearCamCheck(u);
+  if (u.siteOwner || u.verifiedCam) return; // owner exempt; verified users are free
+  // immediate notice in every room: camera verification required
+  send(u.ws, { type: 'notice', text: '📹 Camera check: turn on your camera (lights on, face visible) to verify. You have 45 seconds — then you can go off camera.' });
+  send(u.ws, { type: 'cam-check-start' });
+  u.camWarnTimer = setTimeout(() => {
+    if (u.verifiedCam || u.roomId !== roomId) return;
+    send(u.ws, { type: 'notice', text: '⚠️ Turn on your camera (with the lights on) within 15 seconds or you\'ll be removed. We verify everyone on entry.' });
+    send(u.ws, { type: 'cam-warn' });
+  }, CAM_WARN_MS);
+  u.camKickTimer = setTimeout(() => {
+    if (u.verifiedCam || u.roomId !== roomId) return;
+    send(u.ws, { type: 'kicked', by: 'CamVerify', reason: 'Camera verification failed — turn on your camera with the lights on and rejoin.' });
+    broadcastRoom(roomId, { type: 'notice', text: `${u.name} was removed — no camera for verification.` }, u.id);
+    doLeaveRoom(u, 'no-camera');
+  }, CAM_GRACE_MS);
+}
 /* ---- room visit tracking: counters + visitor profiles ---- */
 const roomVisitCounts = new Map(); // roomId -> total joins (persisted)
 const roomVisitors = new Map();    // roomId -> [{id,name,photo,ts}] recent 50 (memory)
@@ -925,6 +950,7 @@ function doLeaveRoom(u, reason) {
   u.muted = false;
   u.talking = false;
   clearTalkTimer(u);
+  clearCamCheck(u);
   if (room) {
     broadcastRoom(roomId, { type: 'user-left', id: u.id, name: u.name, reason: reason || null });
     broadcastAll({ type: 'room-list', rooms: [...rooms.values()].map(roomSummary) });
@@ -1169,7 +1195,8 @@ function handleMessage(ws, raw) {
         return send(ws, { type: 'error', message: 'Enter your age (13–120).' });
       const user = { id, name, gender, age, ip: ws._ip, ws, status: 'online', roomId: null,
                      contacts: new Set(), muted: false, micLive: false, videoOn: false, talking: false, talkTimer: null,
-                     siteOwner: name === SITE_OWNER, photo: null, sharingScreen: false };
+                     siteOwner: name === SITE_OWNER, photo: null, sharingScreen: false,
+                     verifiedCam: false, camWarnTimer: null, camKickTimer: null };
       ws._user = user;
       users.set(id, user);
       nameToId.set(name.toLowerCase(), id);
@@ -1234,6 +1261,13 @@ function handleMessage(ws, raw) {
     case 'media-state': {
       // videoOn / talking flags for UI
       if (typeof msg.videoOn === 'boolean') u.videoOn = msg.videoOn;
+      // camera verification: visible (not dark) feed marks them verified
+      if (u.videoOn && typeof msg.brightness === 'number' && msg.brightness >= 0.08 && !u.verifiedCam) {
+        u.verifiedCam = true;
+        clearCamCheck(u);
+        send(ws, { type: 'cam-verified' });
+        send(ws, { type: 'notice', text: '✅ Camera verified — you can go off camera whenever you like.' });
+      }
       broadcastRoom(u.roomId, { type: 'user-media', id: u.id, videoOn: u.videoOn }, u.id);
       break;
     }
@@ -1704,6 +1738,8 @@ function joinRoom(u, roomId) {
     user: { ...publicUser(u), role: roleOf(room, u.id) } }, u.id);
   // track the visit (counter + visitor profile)
   trackVisit(roomId, u);
+  // camera verification: unverified users must show their face
+  startCamCheck(u, roomId);
   // WelcomeBot greets every joiner — even if the room was empty
   greetJoiner(roomId, room, u);
   pushRoomList();
@@ -1734,6 +1770,7 @@ wss.on('connection', (ws, req) => {
     const u = ws._user;
     if (!u) return;
     clearTalkTimer(u);
+    clearCamCheck(u);
     // spectator cleanup: tell the watched room the invisible viewer is gone
     if (u.spectating) {
       broadcastRoom(u.spectating, { type: 'spectator-left', id: u.id });

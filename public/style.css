@@ -431,6 +431,19 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .vinfo { flex: 1; }
 .vinfo small { color: var(--muted); }
 
+/* ---------- camera verification banner ---------- */
+#cam-check-banner {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 14px; margin-bottom: 10px; text-align: center;
+  background: rgba(37,244,238,.1); border: 1px solid var(--accent3); border-radius: 12px;
+  font-weight: 600;
+}
+#cam-check-banner.hidden { display: none; }
+#cam-check-banner.warn {
+  background: rgba(254,44,85,.16); border-color: var(--accent1); color: #ff8a8a;
+  animation: rec-blink 1s ease-in-out infinite;
+}
+
 /* ---------- VIP badges ---------- */
 .vip-badge {
   display: inline-flex; align-items: center; gap: 2px; margin-right: 5px; vertical-align: middle;
