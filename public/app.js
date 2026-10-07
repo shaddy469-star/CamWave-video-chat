@@ -33,6 +33,10 @@ function connect() {
   S.ws.onopen = () => {
     const saved = localStorage.getItem('camwave_nick');
     if (saved) { $('nick-input').value = saved; }
+    // auto re-login if the socket dropped mid-session
+    if (S.myName) {
+      wsSend({ type: 'hello', name: S.myName, gender: S.myGender || 'm', age: S.myAge || 25, ownerPass: S.ownerPass || '' });
+    }
   };
   S.ws.onmessage = (e) => { try { onServer(JSON.parse(e.data)); } catch {} };
   S.ws.onclose = () => {
@@ -52,11 +56,14 @@ function onServer(m) {
       $('my-name').textContent = m.name;
       $('siteowner-btn').classList.toggle('hidden', !S.siteOwner);
       updateCoinDisplay();
-      if (m.siteBanner) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
+      if (m.siteBanner && !S._welcomed) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
       if (m.triviaBoard) { S.triviaBoard = m.triviaBoard; renderTriviaBoard(); }
       if (m.topSpenders) renderTopSpenders(m.topSpenders);
       if (pendingPhoto) { S.myPhoto = pendingPhoto; wsSend({ type: 'set-photo', dataUrl: pendingPhoto }); pendingPhoto = null; }
       wsSend({ type: 'get-contacts' });
+      S._welcomed = true;
+      // complete any room tap that happened while disconnected
+      if (S.pendingJoin) { const pj = S.pendingJoin; S.pendingJoin = null; wsSend(pj); }
       break;
     case 'coins':
       S.coins = m.balance; updateCoinDisplay(); break;
@@ -243,6 +250,7 @@ function doLogin() {
   if (!Number.isFinite(age) || age < 13 || age > 120) { $('login-error').textContent = 'Enter your age (13+).'; return; }
   $('login-error').textContent = '';
   const ownerPass = $('ownerpass-input') ? $('ownerpass-input').value : '';
+  S.ownerPass = ownerPass;
   wsSend({ type: 'hello', name, gender, age, ownerPass });
 }
 $('status-select').onchange = (e) => wsSend({ type: 'set-status', status: e.target.value });
@@ -323,8 +331,13 @@ function roomCard(r) {
     <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>
     ${r.visits ? `<div class="rc-visits">📊 ${r.visits.toLocaleString()} visited</div>` : ''}`;
   d.onclick = () => {
-    if (r.private && S.siteOwner) wsSend({ type: 'spy-join', roomId: r.id });
-    else wsSend({ type: 'join-room', roomId: r.id });
+    const msg = (r.private && S.siteOwner) ? { type: 'spy-join', roomId: r.id } : { type: 'join-room', roomId: r.id };
+    if (S.ws && S.ws.readyState === 1) wsSend(msg);
+    else {
+      S.pendingJoin = msg;
+      toast('🔄 Reconnecting…');
+      try { S.ws.close(); } catch {}
+    }
   };
   return d;
 }
