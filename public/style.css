@@ -147,6 +147,16 @@ body {
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
 .panel h3 { margin: 0 0 10px; font-size: 1em; }
 .user-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.user-list.ledger { gap: 0; }
+.user-row.ledger-row {
+  border-radius: 0; border-bottom: 1px solid var(--line);
+  background: transparent; cursor: pointer; font-size: .95em; padding: 8px 6px;
+}
+.user-row.ledger-row:first-child { border-top: 1px solid var(--line); }
+.user-row.ledger-row:hover { border-bottom: 1px solid var(--line); margin: 0; background: var(--bg2); }
+.user-row.ledger-row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-row.ledger-row .nm b { font-weight: 700; }
+.user-row.ledger-row .who { color: var(--accent3); font-weight: 600; white-space: nowrap; margin-left: 8px; }
 .activity-log { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
 .activity-row { font-size: .82em; color: var(--muted); padding: 3px 8px; background: var(--bg2); border-radius: 7px; }
 .activity-row b { color: var(--text); }

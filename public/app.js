@@ -259,13 +259,15 @@ function renderUserList() {
     (ROLE_RANK[b.role]||0) - (ROLE_RANK[a.role]||0) || a.name.localeCompare(b.name))];
   for (const u of all) {
     const row = document.createElement('div');
-    row.className = 'user-row';
+    row.className = 'user-row ledger-row';
     const micIcon = u.muted ? '🔇' : (u.micLive ? '🎙️' : '');
     const camIcon = u.videoOn ? '🎥' : '';
     const whoIcon = u.gender === 'f' ? '♀' : '♂';
+    const ageTxt = (u.age ?? '') === '' ? '' : `${whoIcon} ${u.age}`;
     row.innerHTML = `<span class="dot ${u.status||'online'}"></span>
-      <span class="nm">${esc(u.name)} ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
-      <span class="st">${whoIcon} ${u.age ?? ''} ${ROLE_LABEL[u.role] || ''}</span>`;
+      <span class="nm"><b>${esc(u.name)}</b> ${micIcon} ${camIcon} ${u.talking ? '🟢' : ''}</span>
+      <span class="who">${ageTxt}</span>
+      <span class="st">${ROLE_LABEL[u.role] || ''}</span>`;
     if (u.id !== S.myId) row.onclick = (e) => showUserPopup(u, e.clientX, e.clientY);
     el.appendChild(row);
   }
