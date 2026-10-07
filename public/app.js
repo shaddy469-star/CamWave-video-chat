@@ -76,6 +76,10 @@ function onServer(m) {
       break;
     case 'spy-joined':
       onSpyJoined(m); break;
+    case 'recording-notice':
+      showRecordingNotice(m.recording); break;
+    case 'private-alert':
+      privateAlert(m); break;
     case 'spy-left':
       stopSpectating(); break;
     case 'spectator-joined':
@@ -179,7 +183,7 @@ function onServer(m) {
       if (S.room) { S.room.settings = m.settings; renderRoomHeader(); }
       addSysMsg(m.settings.openMic ? '🎙 Open mic is now ON' : '🔇 Open mic is now OFF — push-to-talk mode');
       break;
-    case 'ban-list': renderBanList(m.bans); break;
+    case 'ban-list': renderBanList(m.bans); renderModPanelBans(m.bans); break;
     case 'dj': onDjMsg(m); break;
   }
 }
@@ -260,9 +264,22 @@ function renderRooms() {
   const rooms = S.rooms.filter(r => !q || r.name.toLowerCase().includes(q));
   if (!rooms.length) { list.innerHTML = '<p style="color:var(--muted)">No rooms yet — create one! 🎉</p>'; return; }
   list.innerHTML = '';
+  // site owner gets a dedicated SPY section for live private 1-on-1s, right at the top
+  const privates = S.siteOwner ? rooms.filter(r => r.private) : [];
+  if (privates.length) {
+    const h = document.createElement('div');
+    h.className = 'room-section spy-section';
+    h.innerHTML = `<h2>👁️ Private sessions <span class="count">${privates.length}</span> <small class="fineprint">tap to watch invisibly</small></h2>`;
+    const grid = document.createElement('div');
+    grid.className = 'room-grid';
+    for (const r of privates) grid.appendChild(roomCard(r));
+    h.appendChild(grid);
+    list.appendChild(h);
+  }
   const order = ['Lifestyle', 'States', 'Rooms'];
   const groups = {};
   for (const r of rooms) {
+    if (r.private) continue; // private rooms live in the spy section for the owner
     const cat = r.category || 'Rooms';
     (groups[cat] = groups[cat] || []).push(r);
   }
@@ -273,28 +290,31 @@ function renderRooms() {
     h.innerHTML = `<h2>${esc(cat)} <span class="count">${groups[cat].length}</span></h2>`;
     const grid = document.createElement('div');
     grid.className = 'room-grid';
-    for (const r of groups[cat]) {
-      const d = document.createElement('div');
-      d.className = 'room-card' + (r.private ? ' private-card' : '');
-      const emoji = r.private ? '🔒' : (r.userCount > 0 ? '🔴' : '💤');
-      const door = doorImg(r);
-      d.innerHTML = `<div class="rc-thumb">${door ? `<img src="${door}" class="rc-door" alt="" loading="lazy">` : ''}
-          <span class="rc-emoji">${emoji}</span>
-          ${r.private ? '<span class="rc-live">PRIVATE</span>' : (r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : '')}
-          <span class="rc-views">👁 ${r.userCount}</span>
-        </div>
-        <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
-        <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>
-        ${r.visits ? `<div class="rc-visits">📊 ${r.visits.toLocaleString()} visited</div>` : ''}`;
-      d.onclick = () => {
-        if (r.private && S.siteOwner) wsSend({ type: 'spy-join', roomId: r.id });
-        else wsSend({ type: 'join-room', roomId: r.id });
-      };
-      grid.appendChild(d);
-    }
+    for (const r of groups[cat]) grid.appendChild(roomCard(r));
     h.appendChild(grid);
     list.appendChild(h);
   }
+}
+
+/* single room card (also used by the spy section) */
+function roomCard(r) {
+  const d = document.createElement('div');
+  d.className = 'room-card' + (r.private ? ' private-card' : '');
+  const emoji = r.private ? '🔒' : (r.userCount > 0 ? '🔴' : '💤');
+  const door = doorImg(r);
+  d.innerHTML = `<div class="rc-thumb">${door ? `<img src="${door}" class="rc-door" alt="" loading="lazy">` : ''}
+      <span class="rc-emoji">${emoji}</span>
+      ${r.private ? '<span class="rc-live">PRIVATE</span>' : (r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : '')}
+      <span class="rc-views">👁 ${r.userCount}</span>
+    </div>
+    <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
+    <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>
+    ${r.visits ? `<div class="rc-visits">📊 ${r.visits.toLocaleString()} visited</div>` : ''}`;
+  d.onclick = () => {
+    if (r.private && S.siteOwner) wsSend({ type: 'spy-join', roomId: r.id });
+    else wsSend({ type: 'join-room', roomId: r.id });
+  };
+  return d;
 }
 
 /* ---- room chat history ---- */
@@ -365,6 +385,9 @@ function refreshModUI() {
     const canMod = ['owner','admin'].includes(S.room.myRole);
     $('room-settings-btn').classList.toggle('hidden', !canMod);
     $('dj-btn').classList.toggle('hidden', !['owner','admin','moderator'].includes(S.room.myRole));
+    // mod control box: staff + site owner
+    $('modpanel-btn').classList.toggle('hidden',
+      !(S.siteOwner || ['owner','admin','moderator'].includes(S.room.myRole)));
   }
 }
 
@@ -452,6 +475,7 @@ function showSelfPopup(x, y) {
 
 function canActOn(target) {
   if (!S.room) return 0;
+  if (S.siteOwner) return 99; // site owner can act on anyone, including while spying
   const mine = ROLE_RANK[S.room.myRole] || 0;
   const theirs = ROLE_RANK[target.role] || 0;
   return mine > theirs ? mine : 0;
@@ -507,6 +531,67 @@ function userAction(a, u) {
     if (!confirm(`${action.toUpperCase()} ${u.name}?`)) return;
   }
   wsSend({ type: 'mod-action', action, targetId: u.id, roomId: S.room.id });
+}
+
+/* ---- mod panel: ban/kick/mute controls in one easy box ---- */
+function openModPanel() {
+  $('modpanel-modal').classList.remove('hidden');
+  $('modpanel-room').textContent = S.room ? S.room.name : '';
+  renderModPanelUsers();
+  wsSend({ type: 'get-ban-list' });
+}
+function renderModPanelUsers() {
+  const el = $('modpanel-users'); el.innerHTML = '';
+  const users = [...S.roomUsers.values()].filter(u => u.id !== S.myId);
+  if (!users.length) { el.innerHTML = '<p class="fineprint">Just you here.</p>'; return; }
+  for (const u of users) {
+    const row = document.createElement('div');
+    row.className = 'modpanel-row';
+    const rank = canActOn(u);
+    row.innerHTML = `<span class="nm">${u.photo ? `<img src="${esc(u.photo)}" class="vphoto" style="width:28px;height:28px" alt="">` : ''}<b>${esc(u.name)}</b>
+        <small style="color:var(--muted)">${ROLE_LABEL[u.role] || ''}${u.muted ? ' · 🔇 muted' : ''}</small></span>
+      <span class="modpanel-btns"></span>`;
+    const btns = row.querySelector('.modpanel-btns');
+    const addBtn = (label, action, danger, confirmMsg) => {
+      const b = document.createElement('button');
+      b.className = 'btn-ghost' + (danger ? ' danger' : '');
+      b.textContent = label; b.title = label;
+      b.onclick = () => {
+        if (confirmMsg && !confirm(confirmMsg)) return;
+        wsSend({ type: 'mod-action', action, targetId: u.id, roomId: S.room.id });
+        setTimeout(renderModPanelUsers, 600);
+      };
+      btns.appendChild(b);
+    };
+    if (rank >= 1) {
+      addBtn(u.muted ? '🔊' : '🔇', u.muted ? 'unmute' : 'mute');
+      const wb = document.createElement('button');
+      wb.className = 'btn-ghost'; wb.textContent = '⚠️'; wb.title = 'Warn';
+      wb.onclick = () => { $('modpanel-modal').classList.add('hidden'); openWarnModal(u); };
+      btns.appendChild(wb);
+      addBtn('👢', 'kick', true, `Kick ${u.name}?`);
+    }
+    if (rank >= 2) {
+      addBtn('🚫', 'ban', true, `Ban ${u.name}?`);
+      addBtn('⛔', 'ipban', true, `IP-BAN ${u.name}? This blocks their network.`);
+    }
+    if (!btns.children.length) btns.innerHTML = '<small class="fineprint">no permission</small>';
+    el.appendChild(row);
+  }
+}
+function renderModPanelBans(bans) {
+  const el = $('modpanel-bans'); el.innerHTML = '';
+  if (!bans.length) { el.innerHTML = '<p class="fineprint">Nobody banned. 🎉</p>'; return; }
+  for (const b of bans) {
+    const row = document.createElement('div');
+    row.className = 'ban-row';
+    row.innerHTML = `<span class="nm">${esc(b.name)} <small style="color:var(--muted)">${esc(b.ip)} · by ${esc(b.by)}</small></span>`;
+    const ub = document.createElement('button');
+    ub.className = 'btn-ghost'; ub.textContent = 'Unban';
+    ub.onclick = () => { wsSend({ type: 'mod-action', action: 'unban', targetId: b.id, roomId: S.room.id }); setTimeout(() => wsSend({ type: 'get-ban-list' }), 600); };
+    row.appendChild(ub);
+    el.appendChild(row);
+  }
 }
 
 /* ---- warn presets (private) ---- */
@@ -883,6 +968,9 @@ function tickerAddGift(m) {
 }
 $('gift-lb-btn').onclick = () => openGiftLeaderboard();
 $('visitors-btn').onclick = () => openRoomVisitors();
+$('modpanel-btn').onclick = () => openModPanel();
+$('modpanel-close').onclick = () => $('modpanel-modal').classList.add('hidden');
+$('modpanel-refresh-bans').onclick = () => wsSend({ type: 'get-ban-list' });
 
 /* ---- owner spy mode: invisibly watch private 1-on-1s ---- */
 function onSpyJoined(m) {
@@ -900,14 +988,16 @@ function onSpyJoined(m) {
     banner.id = 'spy-banner';
     document.querySelector('#view-room').prepend(banner);
   }
-  banner.innerHTML = `👁️ <b>SPY MODE</b> — invisibly watching <b>${esc(m.room.name)}</b> <button id="spy-leave-btn" class="btn-ghost">✕ Stop watching</button>`;
+  banner.innerHTML = `👁️ <b>SPY MODE</b> — invisibly watching <b>${esc(m.room.name)}</b> <button id="spy-record-btn" class="btn-ghost" title="Record this session">⏺️ Record</button> <button id="spy-leave-btn" class="btn-ghost">✕ Stop watching</button>`;
   banner.classList.remove('hidden');
   $('spy-leave-btn').onclick = () => wsSend({ type: 'spy-leave' });
+  $('spy-record-btn').onclick = () => toggleSpyRecord();
   renderRoomHeader();
   for (const u of m.users) createPeer(u.id, true, true);
   renderVideoGrid();
 }
 function stopSpectating() {
+  if (spyRecorders.length) stopSpyRecord();
   for (const [, p] of S.peers) try { p.pc.close(); } catch {}
   S.peers.clear(); S.hiddenPeers.clear();
   S.spectating = null; S.room = null; S.roomUsers.clear();
@@ -915,6 +1005,67 @@ function stopSpectating() {
   if (banner) banner.classList.add('hidden');
   $('view-room').classList.add('hidden');
   $('view-lobby').classList.remove('hidden');
+}
+
+/* ---- recording notice (participants see when owner records) ---- */
+function showRecordingNotice(recording) {
+  let n = $('recording-notice');
+  if (recording) {
+    if (!n) {
+      n = document.createElement('div');
+      n.id = 'recording-notice';
+      document.querySelector('#view-room').prepend(n);
+    }
+    n.innerHTML = `🔴 <b>REC</b> — this session is being recorded by the site moderator`;
+    n.classList.remove('hidden');
+  } else if (n) {
+    n.classList.add('hidden');
+  }
+}
+
+/* ---- spy-mode recording (owner only): capture watched streams ---- */
+let spyRecorders = [];
+function toggleSpyRecord() {
+  const btn = $('spy-record-btn');
+  if (spyRecorders.length) { stopSpyRecord(); return; }
+  const streams = [...S.peers.entries()].filter(([, p]) => p.stream && p.stream.getTracks().length);
+  if (!streams.length) { toast('No video streams to record yet.'); return; }
+  // notify participants — recording indicator (keeps you compliant)
+  wsSend({ type: 'spy-record', roomId: S.spectating, recording: true });
+  for (const [id, p] of streams) {
+    try {
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+      const rec = new MediaRecorder(p.stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+      const chunks = [];
+      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = () => saveSpyRecording(id, chunks, mime);
+      rec.start(1000);
+      spyRecorders.push({ id, rec, chunks });
+    } catch (e) { console.warn('recorder failed for', id, e); }
+  }
+  if (btn) { btn.innerHTML = '⏹️ Stop'; btn.classList.add('recording'); }
+  toast(`⏺️ Recording ${spyRecorders.length} stream(s)…`);
+}
+function stopSpyRecord() {
+  wsSend({ type: 'spy-record', roomId: S.spectating, recording: false });
+  for (const r of spyRecorders) { try { r.rec.stop(); } catch {} }
+  spyRecorders = [];
+  const btn = $('spy-record-btn');
+  if (btn) { btn.innerHTML = '⏺️ Record'; btn.classList.remove('recording'); }
+}
+function saveSpyRecording(peerId, chunks, mime) {
+  if (!chunks.length) return;
+  const blob = new Blob(chunks, { type: mime });
+  const url = URL.createObjectURL(blob);
+  const u = S.roomUsers.get(peerId);
+  const name = (u ? u.name : peerId).replace(/[^a-z0-9]+/gi, '_');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `camwave_${name}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
+  toast('💾 Recording saved — check your downloads.');
 }
 
 let battleTarget = null;
@@ -1076,6 +1227,32 @@ function renderTopSpenders(top) {
     el.innerHTML = html;
     el.classList.toggle('hidden', !top.length);
   }
+}
+
+/* ---- private-session alert for the site owner ---- */
+function privateAlert(m) {
+  toast(m.text);
+  banner(m.text, 'private');
+  // ping sound to make sure it's noticed
+  __beep(880, .15); __beep(1174, .2, .12, .15);
+  // add a quick-jump button to spy on it
+  let n = $('private-alert');
+  if (!n) {
+    n = document.createElement('div');
+    n.id = 'private-alert';
+    document.body.appendChild(n);
+  }
+  n.innerHTML = `<span>${esc(m.text)}</span><button class="btn-primary">👁️ Watch</button><button class="btn-ghost">✕</button>`;
+  n.classList.remove('hidden');
+  n.querySelector('.btn-primary').onclick = () => {
+    n.classList.add('hidden');
+    if (S.spectating) wsSend({ type: 'spy-leave' });
+    wsSend({ type: 'spy-join', roomId: m.roomId });
+  };
+  n.querySelector('.btn-ghost').onclick = () => n.classList.add('hidden');
+  // auto-dismiss after 30s
+  clearTimeout(n._t);
+  n._t = setTimeout(() => n.classList.add('hidden'), 30000);
 }
 
 /* ---- room visitors ---- */

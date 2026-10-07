@@ -93,6 +93,7 @@
       <button id="gift-shop-btn" class="btn-ghost" title="Send a gift">🎁</button>
       <button id="gift-lb-btn" class="btn-ghost" title="Gift leaders">🏆</button>
       <button id="visitors-btn" class="btn-ghost" title="Who visited this room">📊</button>
+      <button id="modpanel-btn" class="btn-ghost hidden" title="Moderation controls">🛡️</button>
     </div>
     <!-- stock-ticker gift board -->
     <div id="gift-ticker-wrap"><div id="gift-ticker"><span class="ticker-label">🎁 LIVE GIFTS</span><div id="ticker-tape"></div></div></div>
@@ -236,6 +237,17 @@
       <h2>⚠️ You've been warned</h2>
       <p id="warned-text" class="lh-body"></p>
       <div class="modal-actions"><button id="warned-ok" class="btn-primary">Understood</button></div>
+    </div>
+  </div>
+
+  <!-- ===== MOD PANEL: ban / kick / mute controls in one box ===== -->
+  <div id="modpanel-modal" class="modal hidden">
+    <div class="modal-card modpanel-card">
+      <h3>🛡️ Moderation <span class="pill" id="modpanel-room"></span></h3>
+      <div id="modpanel-users" class="modpanel-users"></div>
+      <h4>🚫 Banned <button id="modpanel-refresh-bans" class="btn-ghost" title="Refresh ban list">↻</button></h4>
+      <div id="modpanel-bans" class="ban-list"></div>
+      <div class="modal-actions"><button id="modpanel-close" class="btn-ghost">Close</button></div>
     </div>
   </div>
 

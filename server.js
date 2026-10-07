@@ -618,6 +618,9 @@ function broadcastRoom(roomId, obj, exceptId) {
 function broadcastAll(obj) {
   for (const u of users.values()) send(u.ws, obj);
 }
+function notifySiteOwners(obj) {
+  for (const u of users.values()) if (u.siteOwner) send(u.ws, obj);
+}
 
 /* ---- gift leaderboard: most sent & most received ---- */
 const giftSentStats = new Map(); // nameLower -> {name, coins, count}
@@ -916,9 +919,13 @@ function pushRoomList() {
 function handleModAction(actor, msg) {
   const room = rooms.get(msg.roomId);
   if (!room) return send(actor.ws, { type: 'error', message: 'Room not found.' });
-  if (actor.roomId !== room.id) return send(actor.ws, { type: 'error', message: 'You are not in that room.' });
+  // the spectating site owner can moderate the private room they're watching
+  const spectating = actor.siteOwner && actor.spectating === room.id;
+  if (actor.roomId !== room.id && !spectating)
+    return send(actor.ws, { type: 'error', message: 'You are not in that room.' });
   const target = users.get(msg.targetId);
-  const actorRank = rankOf(room, actor.id);
+  // site owner outranks everyone, everywhere
+  const actorRank = actor.siteOwner ? 99 : rankOf(room, actor.id);
 
   // self-unmute is always allowed (no staff rank needed)
   const isSelfUnmute = msg.action === 'unmute' && target && target.id === actor.id;
@@ -1251,6 +1258,10 @@ function handleMessage(ws, raw) {
       const room = rooms.get(msg.roomId);
       if (!room) return send(ws, { type: 'error', message: 'That invite expired.' });
       joinRoom(u, room.id);
+      // alert the site owner that a private session just went live
+      const other = [...roomUsers(room.id)].find(m => m.id !== u.id);
+      notifySiteOwners({ type: 'private-alert', roomId: room.id, roomName: room.name,
+        text: `🔒 ${other ? other.name + ' & ' : ''}${u.name} just went private` });
       break;
     }
     case 'cam-invite-decline': {
@@ -1287,6 +1298,15 @@ function handleMessage(ws, raw) {
       u.spectating = null;
       broadcastRoom(rid, { type: 'spectator-left', id: u.id });
       send(ws, { type: 'spy-left' });
+      break;
+    }
+    case 'spy-record': {
+      // site owner recording a private session — participants are notified (recording notice)
+      if (!u.siteOwner) return send(ws, { type: 'error', message: 'Only the site owner can do that.' });
+      const room = rooms.get(msg.roomId);
+      if (!room || !room.private) return send(ws, { type: 'error', message: 'Not a private room.' });
+      if (u.spectating !== room.id) return send(ws, { type: 'error', message: 'You are not watching that room.' });
+      broadcastRoom(room.id, { type: 'recording-notice', recording: !!msg.recording });
       break;
     }
 
