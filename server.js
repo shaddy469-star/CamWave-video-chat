@@ -1193,9 +1193,11 @@ function clearTalkTimer(u) {
 function startTalkTimer(u) {
   clearTalkTimer(u);
   const room = rooms.get(u.roomId);
-  if (!room || !room.settings.openMic) return;
+  if (!room) return;
+  if (u.siteOwner || rankOf(room, u.id) >= 1) return; // staff exempt
   const limit = room.settings.talkLimitSec | 0;
   if (limit > 0) {
+    send(u.ws, { type: 'talk-timer', limitSec: limit });
     u.talkTimer = setTimeout(() => {
       u.talkTimer = null;
       u.muted = true;
@@ -1910,7 +1912,7 @@ function makeRoom(name, ownerId) {
   const id = 'r' + (nextRoomId++);
   const room = { id, name, ownerId, admins: new Set(), mods: new Set(),
     bans: new Map(), ipBans: new Set(),
-    settings: { openMic: false, talkLimitSec: 0, micLocked: false },
+    settings: { openMic: false, talkLimitSec: 120, micLocked: false },
     dj: { active: false, mode: null, url: null, volume: 1, by: null } };
   rooms.set(id, room);
   return room;
@@ -1940,7 +1942,7 @@ function seedDirectoryRooms() {
     if (rooms.has(d.id)) continue;
     const room = { id: d.id, name: d.name, ownerId: null, admins: new Set(), mods: new Set(),
       bans: new Map(), ipBans: new Set(), permanent: true, category: d.category,
-      settings: { openMic: false, talkLimitSec: 0, micLocked: false },
+      settings: { openMic: false, talkLimitSec: 120, micLocked: false },
       dj: { active: false, mode: null, url: null, volume: 1, by: null } };
     rooms.set(d.id, room);
     loadRoomHistory(d.id);

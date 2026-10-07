@@ -203,12 +203,13 @@ function onServer(m) {
       { const c = S.contacts.find(x => x.id === m.id); if (c) { c.status = m.status; renderContacts(); } }
       break;
     case 'force-mute':
-      S.selfMuted = true;
+      stopTalkCountdown(); S.selfMuted = true;
       setMicEnabled(false, true); toast('🔇 Muted by ' + m.by); renderUserList(); break;
     case 'force-unmute':
       S.selfMuted = false; renderUserList();
       toast('🔊 Unmuted by ' + m.by + ' — you may talk now'); break;
-    case 'talk-timeout':
+    case 'talk-timer': startTalkCountdown(m.limitSec); break;
+  case 'talk-timeout':
       setMicEnabled(false, true); toast(`⏱ Talk time limit (${m.limitSec}s) reached — mic auto-muted`); break;
     case 'kicked': leaveRoomUI(); toast('👢 You were kicked by ' + m.by); break;
     case 'banned': leaveRoomUI(); toast('🚫 ' + m.message); break;
@@ -2572,3 +2573,27 @@ function maybeRestoreProfile(serverPr) {
   for (const p of (backup.photos || []).slice(0, 6)) wsSend({ type: 'add-photo', dataUrl: p });
   toast('📸 Restored your profile photos ✓');
 }
+
+/* 2-minute mic countdown */
+let talkCountdownInt = null;
+function startTalkCountdown(secs) {
+  clearInterval(talkCountdownInt);
+  let left = secs;
+  const el = document.createElement('div');
+  el.id = 'talk-countdown';
+  el.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);border:1px solid var(--accent1);border-radius:20px;padding:6px 16px;font-weight:700;z-index:9000;';
+  document.body.appendChild(el);
+  const tick = () => {
+    const m = Math.floor(left / 60), sec = left % 60;
+    el.textContent = `🎙 ${m}:${String(sec).padStart(2, '0')}`;
+    el.style.borderColor = left <= 30 ? 'var(--bad)' : 'var(--accent1)';
+    if (left <= 0) { clearInterval(talkCountdownInt); el.remove(); return; }
+    left--;
+  };
+  tick();
+  talkCountdownInt = setInterval(tick, 1000);
+  // clear on mute/timeout
+  const orig = window.__talkTimeoutHandler;
+}
+// remove countdown when muted or timeout
+const _origOnServer = onServer;
