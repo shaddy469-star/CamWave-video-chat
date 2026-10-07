@@ -104,17 +104,26 @@ function persistBanner() {
 /* ============================== gifts ==============================
    TikTok-style gift economy: coins, gift shop, animated banners */
 const GIFTS = [
-  { id: 'rose',     emoji: '🌹', name: 'Rose',       cost: 1 },
-  { id: 'coffee',   emoji: '☕', name: 'Coffee',     cost: 5 },
-  { id: 'donut',    emoji: '🍩', name: 'Donut',      cost: 10 },
-  { id: 'icecream', emoji: '🍦', name: 'Ice Cream',  cost: 20 },
-  { id: 'teddy',    emoji: '🧸', name: 'Teddy Bear', cost: 30 },
-  { id: 'giftbox',  emoji: '🎁', name: 'Gift Box',   cost: 50 },
-  { id: 'crown',    emoji: '👑', name: 'Crown',      cost: 100 },
-  { id: 'diamond',  emoji: '💎', name: 'Diamond',    cost: 200 },
-  { id: 'rocket',   emoji: '🚀', name: 'Rocket',     cost: 500 },
-  { id: 'car',      emoji: '🏎️', name: 'Sports Car', cost: 1000 },
-  { id: 'jet',      emoji: '🛩️', name: 'Private Jet', cost: 5000 },
+  { id: 'rose',      emoji: '🌹', name: 'Rose',         cost: 1 },
+  { id: 'coffee',    emoji: '☕', name: 'Coffee',       cost: 1 },
+  { id: 'heart',     emoji: '💖', name: 'Heart',        cost: 5 },
+  { id: 'lollipop',  emoji: '🍭', name: 'Lollipop',     cost: 10 },
+  { id: 'perfume',   emoji: '🌸', name: 'Perfume',      cost: 20 },
+  { id: 'hat',       emoji: '🎩', name: 'Hat',          cost: 99 },
+  { id: 'teddy',     emoji: '🧸', name: 'Teddy Bear',   cost: 100 },
+  { id: 'sunglasses',emoji: '🕶️', name: 'Sunglasses',  cost: 199 },
+  { id: 'corgi',     emoji: '🐶', name: 'Corgi',        cost: 299 },
+  { id: 'concert',   emoji: '🎵', name: 'Concert',      cost: 500 },
+  { id: 'balloon',   emoji: '🎈', name: 'Love Balloon', cost: 699 },
+  { id: 'goldmine',  emoji: '⛏️', name: 'Gold Mine',    cost: 1000 },
+  { id: 'galaxy',    emoji: '🌌', name: 'Galaxy',       cost: 1000 },
+  { id: 'fireworks', emoji: '🎆', name: 'Fireworks',    cost: 1099 },
+  { id: 'ferris',    emoji: '🎡', name: 'Ferris Wheel', cost: 3000 },
+  { id: 'jet',       emoji: '🛩️', name: 'Jet Plane',    cost: 6000 },
+  { id: 'sportscar', emoji: '🏎️', name: 'Sports Car',   cost: 7000 },
+  { id: 'yacht',     emoji: '🛥️', name: 'Yacht',        cost: 7499 },
+  { id: 'lion',      emoji: '🦁', name: 'Lion',         cost: 29999 },
+  { id: 'universe',  emoji: '🌠', name: 'TikTok Universe', cost: 34999 },
 ];
 const STARTING_COINS = 100;
 const DAILY_COINS = 50;
@@ -170,11 +179,13 @@ function claimDaily(name) {
    Money goes directly to YOUR Stripe account (your keys = your bank).
    Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET in Render env to activate. */
 const COIN_PACKAGES = [
-  { id: 'c100',  coins: 100,  price: 99,   tag: 'Starter' },
-  { id: 'c550',  coins: 550,  price: 499,  tag: 'Popular' },
-  { id: 'c1200', coins: 1200, price: 999,  tag: 'Best value' },
-  { id: 'c3000', coins: 3000, price: 2499, tag: 'Whale' },
-  { id: 'c7000', coins: 7000, price: 4999, tag: 'Ballin’' },
+  { id: 'c70',   coins: 70,    price: 99,    tag: 'Starter' },
+  { id: 'c350',  coins: 350,   price: 399,   tag: 'Popular' },
+  { id: 'c700',  coins: 700,   price: 799,   tag: '' },
+  { id: 'c1400', coins: 1400,  price: 1499,  tag: 'Best value' },
+  { id: 'c3500', coins: 3500,  price: 3699,  tag: '' },
+  { id: 'c7000', coins: 7000,  price: 7299,  tag: 'Whale' },
+  { id: 'c17500', coins: 17500, price: 17999, tag: 'Ballin’' },
 ];
 const APP_URL = process.env.APP_URL || 'https://camwave-video-chat-1.onrender.com';
 function handleCoinShop(req, res) {
