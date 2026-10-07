@@ -211,8 +211,31 @@ function onServer(m) {
     case 'talk-timer': startTalkCountdown(m.limitSec); break;
   case 'talk-timeout':
       setMicEnabled(false, true); toast(`⏱ Talk time limit (${m.limitSec}s) reached — mic auto-muted`); break;
-    case 'kicked': leaveRoomUI(); toast('👢 You were kicked by ' + m.by); break;
-    case 'banned': leaveRoomUI(); toast('🚫 ' + m.message); break;
+    case 'kicked': {
+      leaveRoomUI();
+      const kicks = [
+        `👢 BOOTED by ${m.by}! Don't let the door hit ya where the good Lord split ya.`,
+        `👢 ${m.by} kicked you out! That's gotta sting. Walk of shame time. 🚶`,
+        `👢 KICKED! ${m.by} said "nah." Better luck next room, champ.`,
+        `👢 Yeeted by ${m.by}! You were THIS close to behaving.`,
+        `👢 ${m.by} drop-kicked you outta here! Go touch grass. 🌱`,
+      ];
+      showBlastModal('👢 KICKED', kicks[Math.floor(Math.random() * kicks.length)]);
+      break;
+    }
+    case 'banned': {
+      leaveRoomUI();
+      const bans = [
+        '🚫 BANNED! You messed around and found out. Enjoy the void. 🕳️',
+        '🚫 PERMABANNED! Your behavior was so bad it made the bots cringe. 🤖',
+        '🚫 BANNED! Even the trolls are disappointed in you. Pack it up. 📦',
+        '🚫 You are now officially exiled. The door? It hit you. Hard. 🚪💥',
+        '🚫 BANNED! Legend says your bad decisions echoed through every room. 🔊',
+      ];
+      blastToxicNoise();
+      showBlastModal('🚫 BANNED', bans[Math.floor(Math.random() * bans.length)] + (m.message ? '\n\n' + m.message : ''));
+      break;
+    }
     case 'notice': addSysMsg(m.text); toast(m.text); break;
     case 'room-settings-updated':
       if (S.room) { S.room.settings = m.settings; renderRoomHeader(); }
@@ -2622,3 +2645,38 @@ function startTalkCountdown(secs) {
 }
 // remove countdown when muted or timeout
 const _origOnServer = onServer;
+
+/* savage kick/ban modal */
+function showBlastModal(title, text) {
+  let ov = document.getElementById('blast-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'blast-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.9);padding:20px;';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div style="text-align:center;max-width:400px">
+    <div style="font-size:3em;margin-bottom:12px">${title.split(' ')[0]}</div>
+    <h2 style="color:var(--bad);margin:0 0 12px">${esc(title)}</h2>
+    <p style="font-size:1.1em;line-height:1.5">${esc(text)}</p>
+    <button id="blast-ok" class="btn-primary" style="margin-top:16px">Fine. Whatever. 😤</button>
+  </div>`;
+  ov.style.display = 'flex';
+  document.getElementById('blast-ok').onclick = () => ov.style.display = 'none';
+}
+/* toxic ban noise: dissonant screech */
+function blastToxicNoise() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    [220, 233, 247, 110].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sawtooth'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.15);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + i * 0.15 + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.15 + 0.5);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime + i * 0.15); o.stop(ctx.currentTime + i * 0.15 + 0.55);
+    });
+  } catch {}
+}
