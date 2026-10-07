@@ -134,7 +134,7 @@ const htmlUnesc = s => String(s).replace(/&quot;/g, '"').replace(/&#039;/g, "'")
 
 async function getTriviaQuestion() {
   try {
-    const j = await fetchJson('https://opentdb.com/api.php?amount=1&type=multiple');
+    const j = await fetchJson('https://opentdb.com/api.php?amount=1&type=multiple&difficulty=easy');
     const q = j.results && j.results[0];
     if (q && q.correct_answer) {
       const correct = htmlUnesc(q.correct_answer);
@@ -159,8 +159,8 @@ async function startTrivia(roomId) {
   const next = { active: true, q, answers: new Map(), scores: (prev && prev.scores) || new Map(), timer: null };
   triviaState.set(roomId, next);
   botSay(roomId, BOT_TRIVIA,
-    `🎲 TRIVIA [${q.category}]\n${q.question}\n${q.options.map((o, i) => `${letters[i]}) ${o}`).join('\n')}\n\nType A, B, C or D — 20 seconds!`);
-  next.timer = setTimeout(() => endTrivia(roomId), 20000);
+    `🎲 TRIVIA [${q.category}]\n${q.question}\n${q.options.map((o, i) => `${letters[i]}) ${o}`).join('\n')}\n\nType A, B, C or D — 2 minutes!`);
+  next.timer = setTimeout(() => endTrivia(roomId), 120000);
   if (next.timer.unref) next.timer.unref();
 }
 function endTrivia(roomId) {
@@ -257,6 +257,28 @@ function handleBotCommand(u, text) {
   }
   return false;
 }
+
+// ---- ambient bots: keep rooms lively on their own ----
+// Every minute, maybe drop something fresh in rooms with 2+ people.
+function ambientBotTick() {
+  for (const room of rooms.values()) {
+    let n = 0;
+    for (const u of users.values()) if (u.roomId === room.id) n++;
+    if (n < 2) continue;
+    const tst = triviaState.get(room.id);
+    if ((!tst || !tst.active) && Math.random() < 1 / 15) {
+      startTrivia(room.id).catch(() => {});
+    }
+    if (Math.random() < 1 / 25) {
+      const pick = Math.random();
+      if (pick < 0.45) hypeTrending(room.id).catch(() => {});
+      else if (pick < 0.75) hypeJoke(room.id).catch(() => {});
+      else hypeFact(room.id).catch(() => {});
+    }
+  }
+}
+const ambientTimer = setInterval(ambientBotTick, 60000);
+if (ambientTimer.unref) ambientTimer.unref();
 
 const ROLE_RANK = { member: 0, moderator: 1, admin: 2, owner: 3 };
 
@@ -727,6 +749,33 @@ function handleMessage(ws, raw) {
     case 'dm-history': {
       const k = dmKey(u.id, msg.with);
       send(ws, { type: 'dm-history', with: msg.with, messages: dmHistory.get(k) || [] });
+      break;
+    }
+
+    case 'cam-invite': {
+      const target = users.get(msg.to);
+      if (!target) return send(ws, { type: 'error', message: 'User is offline.' });
+      if (target.id === u.id) return;
+      const room = makeRoom(`🔒 ${u.name} & ${target.name}`, u.id);
+      joinRoom(u, room.id);
+      send(target.ws, { type: 'cam-invite', from: u.id, fromName: u.name, roomId: room.id, roomName: room.name });
+      break;
+    }
+    case 'cam-invite-accept': {
+      const room = rooms.get(msg.roomId);
+      if (!room) return send(ws, { type: 'error', message: 'That invite expired.' });
+      joinRoom(u, room.id);
+      break;
+    }
+    case 'cam-invite-decline': {
+      const from = users.get(msg.from);
+      if (from && from.ws) send(from.ws, { type: 'notice', text: `${u.name} declined your video chat invite.` });
+      const room = rooms.get(msg.roomId);
+      if (room) {
+        let n = 0;
+        for (const x of users.values()) if (x.roomId === room.id) n++;
+        if (n <= 1) { rooms.delete(room.id); pushRoomList(); }
+      }
       break;
     }
 

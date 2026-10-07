@@ -68,6 +68,11 @@ function onServer(m) {
       if (u) { u.sharingScreen = m.sharing; renderVideoGrid(); }
       break;
     }
+    case 'cam-invite':
+      pendingInvite = m;
+      $('invite-text').textContent = `${m.fromName} invited you to a private video chat.`;
+      $('invite-modal').classList.remove('hidden');
+      break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -380,6 +385,19 @@ function sendWarn(reason) {
 }
 $('warn-send').onclick = () => sendWarn($('warn-custom').value.trim());
 $('warn-close').onclick = () => $('warn-modal').classList.add('hidden');
+
+/* ---- private cam invites ---- */
+let pendingInvite = null;
+$('invite-accept').onclick = () => {
+  if (pendingInvite) wsSend({ type: 'cam-invite-accept', roomId: pendingInvite.roomId });
+  pendingInvite = null;
+  $('invite-modal').classList.add('hidden');
+};
+$('invite-decline').onclick = () => {
+  if (pendingInvite) wsSend({ type: 'cam-invite-decline', from: pendingInvite.from, roomId: pendingInvite.roomId });
+  pendingInvite = null;
+  $('invite-modal').classList.add('hidden');
+};
 
 /* ---- public moderation banner ---- */
 let modBannerTimer = null;
@@ -916,9 +934,15 @@ function renderContacts() {
     row.innerHTML = `<span class="dot ${c.online ? c.status : 'offline'}" style="${c.online?'':'background:#555'}"></span>
       <span class="nm">${esc(c.name)}</span>
       ${S.dmUnread.has(c.id) ? '<span class="badge" style="position:static">●</span>' : ''}
+      ${c.online ? '<button class="btn-ghost" data-x="cam" title="Invite to private video chat">📹</button>' : ''}
       <button class="btn-ghost" data-x="rm" title="Remove">✕</button>`;
     row.onclick = (e) => {
       if (e.target.dataset.x === 'rm') { wsSend({ type: 'remove-contact', id: c.id }); return; }
+      if (e.target.dataset.x === 'cam') {
+        wsSend({ type: 'cam-invite', to: c.id });
+        toast(`📹 Invited ${c.name} to a private video chat…`);
+        return;
+      }
       openDm(c.id, c.name);
     };
     el.appendChild(row);
