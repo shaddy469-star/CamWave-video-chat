@@ -489,6 +489,12 @@ function handleMessage(ws, raw) {
         room.dj = { active: true, mode: 'file', url: null, volume: 1, by: u.name };
         broadcastRoom(room.id, { type: 'dj', action: 'start-file', by: u.name }, u.id);
         send(ws, { type: 'dj', action: 'you-are-dj' });
+      } else if (msg.action === 'start-tab') {
+        // Tab audio (e.g. Spotify web player) captured client-side via
+        // getDisplayMedia; admin streams the track over WebRTC like file mode.
+        room.dj = { active: true, mode: 'tab', url: null, volume: 1, by: u.name };
+        broadcastRoom(room.id, { type: 'dj', action: 'start-tab', by: u.name }, u.id);
+        send(ws, { type: 'dj', action: 'you-are-dj' });
       } else if (msg.action === 'volume') {
         const v = Math.max(0, Math.min(1, Number(msg.volume)));
         room.dj.volume = v;

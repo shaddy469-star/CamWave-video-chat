@@ -413,8 +413,8 @@ function createPeer(peerId, offerer) {
       pc.addTransceiver('audio', { direction: 'recvonly' });
     } catch {}
   }
-  // DJ file track, if currently DJing
-  if (S.dj.active && S.dj.mode === 'file' && S.dj.track) {
+  // DJ file/tab track, if currently DJing
+  if (S.dj.active && (S.dj.mode === 'file' || S.dj.mode === 'tab') && S.dj.track) {
     try { peer.djSender = pc.addTrack(S.dj.track, S.dj.stream); } catch {}
   }
 
@@ -684,6 +684,10 @@ function onDjMsg(m) {
     addSysMsg(`🎧 ${m.by} is DJing an audio file.`);
     S.dj.active = true; S.dj.mode = 'file-remote'; S.dj.by = m.by;
     toast('🎧 ' + m.by + ' is DJing — listen for their audio track.');
+  } else if (m.action === 'start-tab') {
+    addSysMsg(`🎧 ${m.by} is DJing their tab audio (e.g. Spotify).`);
+    S.dj.active = true; S.dj.mode = 'tab-remote'; S.dj.by = m.by;
+    toast('🎧 ' + m.by + ' is DJing — listen for their audio track.');
   } else if (m.action === 'stop') {
     stopDjLocal();
     addSysMsg('🎧 DJ stopped.');
@@ -721,6 +725,45 @@ function startDjUrl(url, by) {
   audio.play().catch(() => toast('Could not play that stream URL.'));
   S.dj = { active: true, mode: 'url', audio, url, track: null, stream: null, by };
 }
+async function djPlayTab() {
+  // Share another browser tab's audio (Spotify web player, YouTube, …) with the room.
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia)
+    return toast('Tab audio share is not supported in this browser.');
+  stopDjLocal();
+  let disp;
+  try {
+    disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch (e) { return; /* user cancelled the picker */ }
+  const srcTracks = disp.getAudioTracks();
+  if (!srcTracks.length) {
+    disp.getTracks().forEach(t => { try { t.stop(); } catch {} });
+    return toast('No audio in that share — pick the music tab and tick "Share tab audio".');
+  }
+  // Route through a gain node so the DJ volume slider works.
+  let stream = disp, track = srcTracks[0], gainNode = null, audioCtx = null;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(disp);
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = ($('dj-volume').value | 0) / 100;
+    const dest = audioCtx.createMediaStreamDestination();
+    src.connect(gainNode); gainNode.connect(dest);
+    stream = dest.stream;
+    track = stream.getAudioTracks()[0];
+    disp.getVideoTracks().forEach(t => { try { t.stop(); } catch {} });
+  } catch (e) { /* fall back to the raw captured track */ }
+  const endDj = () => { stopDjLocal(); wsSend({ type: 'dj', action: 'stop' }); };
+  track.onended = endDj;
+  srcTracks.forEach(t => { if (t !== track) t.onended = endDj; });
+  S.dj = { active: true, mode: 'tab', audio: null, url: null, track, stream, by: S.myName,
+           gainNode, audioCtx, dispStream: disp };
+  for (const [, p] of S.peers) {
+    try { p.djSender = p.pc.addTrack(track, stream); } catch (e) { console.warn(e); }
+  }
+  wsSend({ type: 'dj', action: 'start-tab' });
+  $('dj-modal').classList.add('hidden');
+  toast('🎧 You are now DJing your tab audio for the room!');
+}
 function stopDjLocal() {
   if (S.dj.audio) { try { S.dj.audio.pause(); } catch {} }
   if (S.dj.track) {
@@ -728,9 +771,12 @@ function stopDjLocal() {
       try { if (p.djSender) { p.pc.removeTrack(p.djSender); p.djSender = null; } } catch {}
     }
   }
+  if (S.dj.dispStream) { try { S.dj.dispStream.getTracks().forEach(t => t.stop()); } catch {} }
+  if (S.dj.audioCtx) { try { S.dj.audioCtx.close(); } catch {} }
   S.dj = { active: false, mode: null, audio: null, url: null, track: null, stream: null, by: null };
 }
 $('dj-play-file').onclick = djPlayFile;
+$('dj-play-tab').onclick = djPlayTab;
 $('dj-play-url').onclick = () => {
   const url = $('dj-url').value.trim();
   if (!/^https?:\/\//i.test(url)) return toast('Paste a valid http(s) audio URL.');
@@ -742,6 +788,7 @@ $('dj-stop').onclick = () => { stopDjLocal(); wsSend({ type: 'dj', action: 'stop
 $('dj-volume').oninput = (e) => {
   const v = (e.target.value | 0) / 100;
   if (S.dj.audio) S.dj.audio.volume = v;
+  if (S.dj.gainNode) { try { S.dj.gainNode.gain.value = v; } catch {} }
   wsSend({ type: 'dj', action: 'volume', volume: v });
 };
 
