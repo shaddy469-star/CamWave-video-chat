@@ -101,7 +101,10 @@ function onServer(m) {
       for (const u of m.users) setUserProp(u.id, 'role', u.role);
       renderUserList(); refreshModUI(); break;
     case 'signal': onSignal(m.from, m.data); break;
-    case 'chat-msg': addChatMsg(m); break;
+    case 'chat-msg':
+      addChatMsg(m);
+      if (m.name === '🤖 RizzBot' && m.text) robotSpeak(m.text);
+      break;
     case 'chat-media': addMediaMsg(m); break;
     case 'dm-msg': onDmMsg(m); break;
     case 'dm-sent': onDmSent(m); break;
@@ -507,6 +510,22 @@ function playSpookySound(kind) {
         tone({ type: 'triangle', f0: 700, f1: 340, dur: 2, vol: 0.1, lfoF: 6, lfoAmt: 120 });
     }
     setTimeout(() => { try { ctx.close(); } catch {} }, 4500);
+  } catch {}
+}
+
+/* ---- rizz bot robot voice ---- */
+function robotSpeak(text) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = 0.2;   // low pitch = robotic
+    u.rate = 1.05;
+    u.volume = 0.9;
+    const voices = speechSynthesis.getVoices();
+    const v = voices.find(v => /google uk english male|daniel|google us english/i.test(v.name));
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
   } catch {}
 }
 
