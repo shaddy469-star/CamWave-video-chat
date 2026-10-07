@@ -33,6 +33,7 @@ function connect() {
   S.ws.onopen = () => {
     const saved = localStorage.getItem('camwave_nick');
     if (saved) { $('nick-input').value = saved; }
+    try { S.ownerPass = S.ownerPass || sessionStorage.getItem('camwave_ownerpass') || ''; } catch {}
     // auto re-login if the socket dropped mid-session
     if (S.myName) {
       wsSend({ type: 'hello', name: S.myName, gender: S.myGender || 'm', age: S.myAge || 25, ownerPass: S.ownerPass || '' });
@@ -166,7 +167,13 @@ function onServer(m) {
       break;
     case 'room-list':
       S.rooms = m.rooms; renderRooms(); break;
-    case 'room-joined': onRoomJoined(m); break;
+    case 'room-joined':
+    if (S.siteOwner && m.selfMuted) {
+      toast('🔄 Session expired — re-logging in as owner...');
+      setTimeout(() => location.reload(), 1500);
+      break;
+    }
+    onRoomJoined(m); break;
     case 'room-history': renderHistory(m.messages || []); break;
     case 'left-room': break;
     case 'user-joined': onUserJoined(m.user); break;
