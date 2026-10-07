@@ -608,6 +608,118 @@ function broadcastRoom(roomId, obj, exceptId) {
 function broadcastAll(obj) {
   for (const u of users.values()) send(u.ws, obj);
 }
+
+/* ---- gift leaderboard: most sent & most received ---- */
+const giftSentStats = new Map(); // nameLower -> {name, coins, count}
+const giftRecvStats = new Map();
+function trackGift(senderName, recvName, cost) {
+  const sk = senderName.toLowerCase();
+  const s = giftSentStats.get(sk) || { name: senderName, coins: 0, count: 0 };
+  s.coins += cost; s.count++; s.name = senderName; giftSentStats.set(sk, s);
+  const rk = recvName.toLowerCase();
+  const r = giftRecvStats.get(rk) || { name: recvName, coins: 0, count: 0 };
+  r.coins += cost; r.count++; r.name = recvName; giftRecvStats.set(rk, r);
+}
+function giftLeaderboard() {
+  const top = (m) => [...m.values()].sort((a, b) => b.coins - a.coins).slice(0, 10)
+    .map(x => ({ name: x.name, coins: x.coins, count: x.count }));
+  return { type: 'gift-leaderboard', sent: top(giftSentStats), received: top(giftRecvStats) };
+}
+
+/* ---- battles: 5-minute gift/tap/trivia showdowns ---- */
+const battles = new Map();            // roomId -> battle
+const pendingChallenges = new Map();  // targetId -> {challengerId, mode, roomId, timer}
+const BATTLE_MS = 5 * 60 * 1000;
+const BATTLE_MODES = {
+  gifts:  { emoji: '🎁', name: 'Gift Battle' },
+  taps:   { emoji: '👆', name: 'Tap Battle' },
+  trivia: { emoji: '🧠', name: 'Trivia Battle' },
+};
+function battleScoresObj(b) {
+  const o = {};
+  o[b.p1.id] = b.scores.get(b.p1.id) || 0;
+  o[b.p2.id] = b.scores.get(b.p2.id) || 0;
+  return o;
+}
+function battleAddScore(roomId, userId, pts) {
+  const b = battles.get(roomId);
+  if (!b || b.over) return;
+  if (userId !== b.p1.id && userId !== b.p2.id) return;
+  b.scores.set(userId, (b.scores.get(userId) || 0) + pts);
+  broadcastRoom(roomId, { type: 'battle-score', scores: battleScoresObj(b) });
+}
+function startBattle(roomId, c1, c2, mode) {
+  if (battles.has(roomId)) return;
+  const b = {
+    p1: { id: c1.id, name: c1.name }, p2: { id: c2.id, name: c2.name },
+    mode, endsAt: Date.now() + BATTLE_MS, scores: new Map([[c1.id, 0], [c2.id, 0]]),
+    over: false, timer: null, qTimer: null, currentQ: null,
+  };
+  b.timer = setTimeout(() => endBattle(roomId), BATTLE_MS);
+  if (b.timer.unref) b.timer.unref();
+  battles.set(roomId, b);
+  const md = BATTLE_MODES[mode];
+  broadcastRoom(roomId, { type: 'battle-start',
+    p1: b.p1, p2: b.p2, mode, modeName: md.emoji + ' ' + md.name,
+    endsAt: b.endsAt, scores: battleScoresObj(b) });
+  botSay(roomId, '⚔️ BattleBot',
+    `⚔️ BATTLE START! ${md.emoji} ${md.name}\n${c1.name} 🆚 ${c2.name}\n⏱ 5:00 on the clock — ` +
+    (mode === 'gifts' ? 'send gifts to your fighter! Most coins wins!' :
+     mode === 'taps' ? 'tap your fighter\'s button! Most taps wins!' :
+     'answer trivia with A/B/C/D — battlers only! +100 per correct!'));
+  if (mode === 'trivia') askBattleQuestion(roomId);
+}
+function endBattle(roomId) {
+  const b = battles.get(roomId);
+  if (!b || b.over) return;
+  b.over = true;
+  if (b.timer) clearTimeout(b.timer);
+  if (b.qTimer) clearTimeout(b.qTimer);
+  battles.delete(roomId);
+  const s1 = b.scores.get(b.p1.id) || 0, s2 = b.scores.get(b.p2.id) || 0;
+  let winner = null, isDraw = false;
+  if (s1 > s2) winner = b.p1; else if (s2 > s1) winner = b.p2; else isDraw = true;
+  const md = BATTLE_MODES[b.mode];
+  broadcastRoom(roomId, { type: 'battle-end',
+    winner, isDraw, scores: battleScoresObj(b), p1: b.p1, p2: b.p2,
+    modeName: md.emoji + ' ' + md.name });
+  botSay(roomId, '⚔️ BattleBot',
+    isDraw ? `🤝 DRAW! ${b.p1.name} and ${b.p2.name} tied at ${s1}! Rematch?`
+    : `🏆 ${winner.name} WINS the ${md.name}! ${s1} — ${s2}\n${winner.name === b.p1.name ? b.p2.name : b.p1.name}, take the L 😅`);
+}
+async function askBattleQuestion(roomId) {
+  const b = battles.get(roomId);
+  if (!b || b.over || b.mode !== 'trivia') return;
+  const q = await getTriviaQuestion();
+  const letters = ['A', 'B', 'C', 'D'];
+  b.currentQ = { q, answered: new Set() };
+  botSay(roomId, '⚔️ BattleBot',
+    `🧠 BATTLE TRIVIA [${q.category}]\n${q.question}\n${q.options.map((o, i) => `${letters[i]}) ${o}`).join('\n')}\n\n${b.p1.name} vs ${b.p2.name} — first correct battler gets +100!`);
+  b.qTimer = setTimeout(() => {
+    const bb = battles.get(roomId);
+    if (!bb || bb.over) return;
+    bb.currentQ = null;
+    askBattleQuestion(roomId);
+  }, 30000);
+  if (b.qTimer.unref) b.qTimer.unref();
+}
+function handleBattleTriviaAnswer(roomId, user, text) {
+  const b = battles.get(roomId);
+  if (!b || b.over || b.mode !== 'trivia' || !b.currentQ) return false;
+  if (user.id !== b.p1.id && user.id !== b.p2.id) return false;
+  const t = text.trim().toUpperCase();
+  const idx = ['A', 'B', 'C', 'D'].indexOf(t);
+  if (idx < 0 || b.currentQ.answered.has(user.id)) return false;
+  b.currentQ.answered.add(user.id);
+  if (idx === b.currentQ.q.correct) {
+    if (b.qTimer) clearTimeout(b.qTimer);
+    b.currentQ = null;
+    battleAddScore(roomId, user.id, 100);
+    botSay(roomId, '⚔️ BattleBot', `✅ ${user.name} got it! +100 battle points!`);
+    askBattleQuestion(roomId);
+  }
+  return true;
+}
 function clientIp(req) {
   const fwd = req.headers['x-forwarded-for'];
   if (fwd) return fwd.split(',')[0].trim();
@@ -999,6 +1111,7 @@ function handleMessage(ws, raw) {
       if (!text) return;
       if (text.startsWith('!') && handleBotCommand(u, text)) break;
       if (handleTriviaAnswer(u.roomId, u, text)) break;
+      if (handleBattleTriviaAnswer(u.roomId, u, text)) break;
       const room = rooms.get(u.roomId);
       const payload = { type: 'chat-msg', from: u.id, name: u.name,
         role: roleOf(room, u.id), text, ts: Date.now() };
@@ -1077,6 +1190,67 @@ function handleMessage(ws, raw) {
       break;
     }
 
+    case 'get-gift-leaderboard': {
+      const lb = giftLeaderboard();
+      if (msg.seed) lb.seed = true;
+      send(ws, lb);
+      break;
+    }
+
+    case 'battle-challenge': {
+      const target = users.get(msg.to);
+      if (!target) return send(ws, { type: 'error', message: 'User not found.' });
+      if (!u.roomId || target.roomId !== u.roomId)
+        return send(ws, { type: 'error', message: 'You must be in the same room.' });
+      if (target.id === u.id) return send(ws, { type: 'error', message: 'You cannot battle yourself.' });
+      if (battles.has(u.roomId)) return send(ws, { type: 'error', message: 'A battle is already going in this room!' });
+      if (!BATTLE_MODES[msg.mode]) return send(ws, { type: 'error', message: 'Pick a battle mode.' });
+      if (pendingChallenges.has(target.id)) return send(ws, { type: 'error', message: 'They already have a pending challenge.' });
+      const md = BATTLE_MODES[msg.mode];
+      const ch = { challengerId: u.id, challengerName: u.name, mode: msg.mode, roomId: u.roomId,
+        timer: setTimeout(() => {
+          pendingChallenges.delete(target.id);
+          send(ws, { type: 'battle-expired', toName: target.name });
+        }, 60000) };
+      if (ch.timer.unref) ch.timer.unref();
+      pendingChallenges.set(target.id, ch);
+      send(target.ws, { type: 'battle-challenge', from: u.id, fromName: u.name,
+        mode: msg.mode, modeName: md.emoji + ' ' + md.name });
+      send(ws, { type: 'battle-sent', toName: target.name });
+      break;
+    }
+
+    case 'battle-accept': {
+      const ch = pendingChallenges.get(u.id);
+      if (!ch) return send(ws, { type: 'error', message: 'No pending challenge.' });
+      clearTimeout(ch.timer);
+      pendingChallenges.delete(u.id);
+      const challenger = users.get(ch.challengerId);
+      if (!challenger || challenger.roomId !== u.roomId)
+        return send(ws, { type: 'error', message: 'Challenger left the room.' });
+      startBattle(u.roomId, challenger, u, ch.mode);
+      break;
+    }
+
+    case 'battle-decline': {
+      const ch = pendingChallenges.get(u.id);
+      if (!ch) break;
+      clearTimeout(ch.timer);
+      pendingChallenges.delete(u.id);
+      const challenger = users.get(ch.challengerId);
+      if (challenger) send(challenger.ws, { type: 'battle-declined', toName: u.name });
+      break;
+    }
+
+    case 'battle-tap': {
+      const b = battles.get(u.roomId);
+      if (!b || b.over || b.mode !== 'taps') break;
+      const side = msg.side;
+      if (side !== b.p1.id && side !== b.p2.id) break;
+      battleAddScore(u.roomId, side, 1);
+      break;
+    }
+
     case 'send-gift': {
       const gift = GIFTS.find(g => g.id === msg.giftId);
       const target = users.get(msg.to);
@@ -1090,9 +1264,14 @@ function handleMessage(ws, raw) {
         return send(ws, { type: 'error', message: `Not enough coins — you have 🪙${bal}.` });
       const newBal = addCoins(u.name, -gift.cost);
       send(ws, { type: 'coins', balance: newBal });
+      trackGift(u.name, target.name, gift.cost);
       const evt = { type: 'gift-event', from: u.id, fromName: u.name, to: target.id, toName: target.name,
         gift: { id: gift.id, emoji: gift.emoji, name: gift.name, cost: gift.cost, tier: giftTier(gift.cost) }, ts: Date.now() };
       broadcastRoom(u.roomId, evt);
+      // battle scoring: gifts to a battler = points
+      const b = battles.get(u.roomId);
+      if (b && !b.over && b.mode === 'gifts' && (target.id === b.p1.id || target.id === b.p2.id))
+        battleAddScore(u.roomId, target.id, gift.cost);
       addHistory(u.roomId, { type: 'chat-msg', from: 'gift', name: '🎁 Gifts', role: 'member',
         text: `${u.name} sent ${target.name} ${gift.emoji} ${gift.name}!`, ts: Date.now(), bot: true });
       break;

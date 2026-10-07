@@ -61,7 +61,18 @@ function onServer(m) {
       S.coins = m.balance; updateCoinDisplay();
       toast(`🎉 Daily bonus: +🪙${m.coins}!`); break;
     case 'gift-event':
-      giftCelebration(m); break;
+      giftCelebration(m); tickerAddGift(m); break;
+    case 'gift-leaderboard':
+      if (m.seed) seedTicker(m); else showGiftLeaderboard(m);
+      break;
+    case 'battle-challenge':
+    case 'battle-sent':
+    case 'battle-declined':
+    case 'battle-expired':
+    case 'battle-start':
+    case 'battle-score':
+    case 'battle-end':
+      onBattleMessage(m); break;
     case 'like-event':
       spawnHearts(4, false);
       railLikes++;
@@ -277,6 +288,13 @@ function onRoomJoined(m) {
   $('activity-log').innerHTML = '';
   $('video-grid').innerHTML = '';
   S.peers.clear(); S.spotlightId = null;
+  // reset battle + ticker state for the new room
+  S_battle = null;
+  if (battleTickTimer) clearInterval(battleTickTimer);
+  const bb = $('battle-bar'); if (bb) bb.classList.add('hidden');
+  tickerItems.length = 0;
+  const tape = $('ticker-tape'); if (tape) tape.innerHTML = '<span class="ticker-item">🎁 Gift activity will stream here…</span>';
+  wsSend({ type: 'get-gift-leaderboard', seed: true });
   renderRoomHeader(); renderUserList(); refreshModUI();
   addSysMsg(`You joined "${m.room.name}" as ${m.room.myRole}.`);
   setupLocalMedia().then(() => {
@@ -399,6 +417,7 @@ function showUserPopup(u, x, y) {
   html += `<button data-a="view">📹 View camera</button>`;
   html += `<button data-a="dm">💬 Message</button>`;
   html += `<button data-a="gift">🎁 Send gift</button>`;
+  html += `<button data-a="battle">⚔️ Battle</button>`;
   if (rank >= 1) {
     html += `<button data-a="warn">⚠️ Warn</button>`;
     html += `<button data-a="mute">${u.muted ? '🔊 Unmute' : '🔇 Mute'}</button>`;
@@ -431,6 +450,7 @@ function userAction(a, u) {
   if (a === 'view') { spotlight(u.id); return; }
   if (a === 'dm') { openDm(u.id, u.name); return; }
   if (a === 'gift') { openGiftShop(u.id); return; }
+  if (a === 'battle') { openBattlePicker(u); return; }
   if (a === 'warn') { openWarnModal(u); return; }
   const map = { mute: u.muted ? 'unmute' : 'mute', kick: 'kick', ban: 'ban', ipban: 'ipban',
                 'promote-mod': 'promote-mod', 'promote-admin': 'promote-admin', demote: 'demote' };
@@ -792,8 +812,189 @@ function openGiftShop(toId) {
   updateCoinDisplay();
   $('gift-modal').classList.remove('hidden');
 }
-$('gift-close').onclick = () => $('gift-modal').classList.add('hidden');
-$('gift-shop-btn').onclick = () => openGiftShop(null);
+/* ---- stock-ticker gift board ---- */
+const tickerItems = [];
+function seedTicker(m) {
+  const tape = $('ticker-tape');
+  if (!tape) return;
+  tickerItems.length = 0;
+  if (m.sent[0]) tickerItems.push(`<span class="ticker-item"><span class="tk-up">▲</span> Top sender: <b>${esc(m.sent[0].name)}</b> <span class="tk-coins">🪙${m.sent[0].coins.toLocaleString()}</span></span>`);
+  if (m.received[0]) tickerItems.push(`<span class="ticker-item"><span class="tk-up">▲</span> Top receiver: <b>${esc(m.received[0].name)}</b> <span class="tk-coins">🪙${m.received[0].coins.toLocaleString()}</span></span>`);
+  if (!tickerItems.length) tickerItems.push('<span class="ticker-item">🎁 No gifts yet — be the first!</span>');
+  tape.innerHTML = tickerItems.join('') + tickerItems.join('');
+}
+function tickerAddGift(m) {
+  const tape = $('ticker-tape');
+  if (!tape) return;
+  const g = m.gift;
+  tickerItems.push(`<span class="ticker-item">${g.emoji} <b>${esc(m.fromName)}</b> → <b>${esc(m.toName)}</b> <span class="tk-coins">🪙${g.cost.toLocaleString()}</span></span>`);
+  if (tickerItems.length > 20) tickerItems.shift();
+  // duplicate for seamless loop
+  tape.innerHTML = tickerItems.join('') + tickerItems.join('');
+  // restart animation to include new content
+  tape.style.animation = 'none'; void tape.offsetWidth; tape.style.animation = '';
+}
+$('gift-lb-btn').onclick = () => openGiftLeaderboard();
+let battleTarget = null;
+function openBattlePicker(u) {
+  battleTarget = u;
+  let m = $('battle-picker-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'battle-picker-modal';
+    m.className = 'modal';
+    m.innerHTML = `<div class="modal-card">
+      <h3>⚔️ Battle <span id="battle-picker-name"></span></h3>
+      <p class="fineprint">Pick a game — 5:00 on the clock!</p>
+      <div class="battle-modes">
+        <button class="battle-mode-btn" data-mode="gifts">🎁<b>Gift Battle</b><span>Most gift coins wins</span></button>
+        <button class="battle-mode-btn" data-mode="taps">👆<b>Tap Battle</b><span>Everyone taps — most taps wins</span></button>
+        <button class="battle-mode-btn" data-mode="trivia">🧠<b>Trivia Battle</b><span>Most correct answers wins</span></button>
+      </div>
+      <div class="modal-actions"><button id="battle-picker-cancel" class="btn-ghost">Cancel</button></div>
+    </div>`;
+    document.body.appendChild(m);
+    m.querySelector('#battle-picker-cancel').onclick = () => m.classList.add('hidden');
+    m.querySelectorAll('.battle-mode-btn').forEach(b => b.onclick = () => {
+      wsSend({ type: 'battle-challenge', to: battleTarget.id, mode: b.dataset.mode });
+      m.classList.add('hidden');
+    });
+  }
+  m.querySelector('#battle-picker-name').textContent = u.name;
+  m.classList.remove('hidden');
+}
+
+let S_battle = null, battleTickTimer = null;
+function onBattleMessage(m) {
+  if (m.type === 'battle-challenge') {
+    let c = $('battle-challenge-modal');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'battle-challenge-modal';
+      c.className = 'modal';
+      c.innerHTML = `<div class="modal-card battle-challenge-card">
+        <h3>⚔️ BATTLE CHALLENGE!</h3>
+        <p id="battle-challenge-text"></p>
+        <div class="modal-actions">
+          <button id="battle-accept-btn" class="btn-primary">Accept ⚔️</button>
+          <button id="battle-decline-btn" class="btn-ghost">Decline</button>
+        </div>
+      </div>`;
+      document.body.appendChild(c);
+      c.querySelector('#battle-accept-btn').onclick = () => { wsSend({ type: 'battle-accept' }); c.classList.add('hidden'); };
+      c.querySelector('#battle-decline-btn').onclick = () => { wsSend({ type: 'battle-decline' }); c.classList.add('hidden'); };
+    }
+    c.querySelector('#battle-challenge-text').innerHTML =
+      `<b>${esc(m.fromName)}</b> challenges you to a<br><b>${esc(m.modeName)}</b>! ⏱ 5:00`;
+    c.classList.remove('hidden');
+    setTimeout(() => c.classList.add('hidden'), 60000);
+  }
+  else if (m.type === 'battle-sent') toast(`⚔️ Challenge sent to ${m.toName}!`);
+  else if (m.type === 'battle-declined') toast(`😅 ${m.toName} declined your battle.`);
+  else if (m.type === 'battle-expired') toast(`⏰ Challenge to ${m.toName} expired.`);
+  else if (m.type === 'battle-start') startBattleUI(m);
+  else if (m.type === 'battle-score') updateBattleScores(m.scores);
+  else if (m.type === 'battle-end') endBattleUI(m);
+}
+function startBattleUI(m) {
+  S_battle = m;
+  let bar = $('battle-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'battle-bar';
+    document.querySelector('#view-room').prepend(bar);
+  }
+  const isTap = m.mode === 'taps';
+  bar.innerHTML = `
+    <div class="battle-top"><span class="battle-mode-tag">${esc(m.modeName)}</span><span class="battle-timer" id="battle-timer">5:00</span></div>
+    <div class="battle-vs">
+      <div class="battle-side p1"><b>${esc(m.p1.name)}</b><span class="battle-score" id="battle-score-1">0</span>
+        ${isTap ? `<button class="tap-btn" data-side="${m.p1.id}">👆 TAP!</button>` : ''}</div>
+      <div class="battle-mid">🆚</div>
+      <div class="battle-side p2"><b>${esc(m.p2.name)}</b><span class="battle-score" id="battle-score-2">0</span>
+        ${isTap ? `<button class="tap-btn" data-side="${m.p2.id}">👆 TAP!</button>` : ''}</div>
+    </div>
+    ${m.mode === 'gifts' ? '<div class="battle-hint">🎁 Send gifts to your fighter!</div>' : ''}
+    ${m.mode === 'trivia' ? '<div class="battle-hint">🧠 Battlers: answer with A/B/C/D!</div>' : ''}`;
+  bar.classList.remove('hidden');
+  bar.querySelectorAll('.tap-btn').forEach(b => b.onclick = () => {
+    wsSend({ type: 'battle-tap', side: b.dataset.side });
+    b.classList.remove('tapped'); void b.offsetWidth; b.classList.add('tapped');
+  });
+  updateBattleScores(m.scores);
+  if (battleTickTimer) clearInterval(battleTickTimer);
+  battleTickTimer = setInterval(() => {
+    if (!S_battle) { clearInterval(battleTickTimer); return; }
+    const left = Math.max(0, S_battle.endsAt - Date.now());
+    const mm = Math.floor(left / 60000), ss = Math.floor(left % 60000 / 1000);
+    const el = $('battle-timer');
+    if (el) { el.textContent = mm + ':' + String(ss).padStart(2, '0'); el.classList.toggle('urgent', left < 30000); }
+    if (left <= 0) clearInterval(battleTickTimer);
+  }, 500);
+}
+function updateBattleScores(scores) {
+  if (!S_battle || !scores) return;
+  const s1 = scores[S_battle.p1.id] || 0, s2 = scores[S_battle.p2.id] || 0;
+  const e1 = $('battle-score-1'), e2 = $('battle-score-2');
+  if (e1) e1.textContent = s1.toLocaleString();
+  if (e2) e2.textContent = s2.toLocaleString();
+  // leader glow
+  document.querySelectorAll('.battle-side').forEach(el => el.classList.remove('leading'));
+  if (s1 !== s2) {
+    const lead = s1 > s2 ? '.battle-side.p1' : '.battle-side.p2';
+    const el = document.querySelector(lead);
+    if (el) el.classList.add('leading');
+  }
+}
+function endBattleUI(m) {
+  if (battleTickTimer) clearInterval(battleTickTimer);
+  S_battle = null;
+  const bar = $('battle-bar');
+  if (bar) setTimeout(() => bar.classList.add('hidden'), 8000);
+  const ov = document.createElement('div');
+  ov.id = 'gift-overlay';
+  ov.classList.add('legendary');
+  const s1 = m.scores[m.p1.id] || 0, s2 = m.scores[m.p2.id] || 0;
+  ov.innerHTML = `<div class="legend-flash"></div>
+    <div class="legend-actor scene-default">🏆</div>
+    <div class="legend-caption">${m.isDraw ? "IT'S A DRAW!" : esc(m.winner.name) + ' WINS!'}</div>
+    <div class="gift-text">${esc(m.modeName)}</div>
+    <div class="gift-name">${esc(m.p1.name)} ${s1.toLocaleString()} — ${s2.toLocaleString()} ${esc(m.p2.name)}</div>`;
+  document.body.appendChild(ov);
+  const kill = () => { if (ov.parentNode) ov.remove(); };
+  ov.onclick = kill;
+  setTimeout(kill, 6000);
+}
+
+/* ---- gift leaderboard ---- */
+function openGiftLeaderboard() {
+  wsSend({ type: 'get-gift-leaderboard' });
+}
+function showGiftLeaderboard(m) {
+  let lb = $('gift-lb-modal');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'gift-lb-modal';
+    lb.className = 'modal';
+    lb.innerHTML = `<div class="modal-card">
+      <h3>🎁 Gift Leaders</h3>
+      <div class="lb-cols">
+        <div><h4>💸 Top Senders</h4><div id="lb-sent"></div></div>
+        <div><h4>👑 Top Receivers</h4><div id="lb-received"></div></div>
+      </div>
+      <div class="modal-actions"><button id="gift-lb-close" class="btn-ghost">Close</button></div>
+    </div>`;
+    document.body.appendChild(lb);
+    lb.querySelector('#gift-lb-close').onclick = () => lb.classList.add('hidden');
+  }
+  const row = (x, i) => {
+    const medal = ['🥇', '🥈', '🥉'][i] || `${i + 1}.`;
+    return `<div class="lb-row"><span>${medal} ${esc(x.name)}</span><span>🪙${x.coins.toLocaleString()} <small>(${x.count})</small></span></div>`;
+  };
+  lb.querySelector('#lb-sent').innerHTML = m.sent.length ? m.sent.map(row).join('') : '<p class="fineprint">No gifts sent yet.</p>';
+  lb.querySelector('#lb-received').innerHTML = m.received.length ? m.received.map(row).join('') : '<p class="fineprint">No gifts received yet.</p>';
+  lb.classList.remove('hidden');
+}
 
 /* ---- TikTok action rail: likes, gifts, share ---- */
 let railLikes = 0;

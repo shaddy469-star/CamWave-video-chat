@@ -354,7 +354,63 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .scene-default { animation: default-slam 0.5s cubic-bezier(0.2, 2.4, 0.4, 1); }
 @keyframes default-slam { 0% { transform: scale(0); } 60% { transform: scale(1.8); } 100% { transform: scale(1.3); } }
 
-/* ---------- TikTok right action rail ---------- */
+/* ---------- stock-ticker gift board ---------- */
+#gift-ticker-wrap { overflow: hidden; background: #0a0a0a; border-bottom: 1px solid var(--line); }
+#gift-ticker { display: flex; align-items: center; }
+.ticker-label {
+  background: var(--accent1); color: #fff; font-weight: 800; font-size: .72em;
+  padding: 6px 12px; white-space: nowrap; letter-spacing: .5px; z-index: 2;
+}
+#ticker-tape {
+  display: flex; gap: 32px; white-space: nowrap; padding: 6px 0;
+  animation: ticker-scroll 30s linear infinite; font-size: .82em; color: var(--text);
+}
+#ticker-tape:hover { animation-play-state: paused; }
+@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.ticker-item { display: inline-flex; align-items: center; gap: 6px; }
+.ticker-item .tk-coins { color: var(--accent2); font-weight: 700; }
+.ticker-item .tk-up { color: var(--good); }
+
+/* ---------- battle UI ---------- */
+#battle-bar {
+  background: linear-gradient(180deg, #1a0a12, #0a0a0a); border-bottom: 2px solid var(--accent1);
+  padding: 10px 12px; animation: battle-in .4s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes battle-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+.battle-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.battle-mode-tag { background: var(--accent1); color: #fff; font-weight: 800; font-size: .78em; padding: 4px 12px; border-radius: 20px; }
+.battle-timer { font-size: 1.4em; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; }
+.battle-timer.urgent { color: var(--accent1); animation: timer-pulse 1s infinite; }
+@keyframes timer-pulse { 50% { transform: scale(1.12); } }
+.battle-vs { display: flex; align-items: center; justify-content: space-around; gap: 8px; }
+.battle-side { flex: 1; text-align: center; padding: 10px; border-radius: var(--radius); background: rgba(255,255,255,.04); border: 2px solid transparent; transition: border-color .3s, box-shadow .3s; }
+.battle-side.leading { border-color: var(--accent2); box-shadow: 0 0 18px rgba(37,244,238,.35); }
+.battle-side b { display: block; font-size: .95em; margin-bottom: 4px; }
+.battle-score { display: block; font-size: 1.6em; font-weight: 800; color: var(--accent2); font-variant-numeric: tabular-nums; }
+.battle-mid { font-size: 1.8em; }
+.battle-hint { text-align: center; color: var(--muted); font-size: .82em; margin-top: 8px; }
+.tap-btn {
+  margin-top: 8px; background: var(--accent1); border: none; color: #fff; font-weight: 800;
+  font-size: 1.1em; padding: 14px 28px; border-radius: 50px; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(254,44,85,.5); transition: transform .08s;
+}
+.tap-btn:active { transform: scale(.92); }
+.tap-btn.tapped { animation: tap-bump .15s; }
+@keyframes tap-bump { 50% { transform: scale(1.12); } }
+.battle-modes { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.battle-mode-btn {
+  display: flex; align-items: center; gap: 12px; background: var(--bg2);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+  cursor: pointer; color: var(--text); text-align: left; font-size: 1.4em;
+}
+.battle-mode-btn:hover { border-color: var(--accent1); }
+.battle-mode-btn b { font-size: .85rem; display: block; }
+.battle-mode-btn span { font-size: .75rem; color: var(--muted); display: block; }
+.battle-challenge-card { text-align: center; border: 2px solid var(--accent1); }
+.lb-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+.lb-cols h4 { margin: 0 0 8px; font-size: .9em; }
+.lb-row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: .88em; }
+.lb-row small { color: var(--muted); }
 .stage-col { position: relative; }
 #action-rail {
   position: absolute; right: 10px; bottom: 110px; z-index: 40;
