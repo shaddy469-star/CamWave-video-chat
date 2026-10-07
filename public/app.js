@@ -296,7 +296,7 @@ function renderRooms() {
     h.appendChild(grid);
     list.appendChild(h);
   }
-  const order = ['Lifestyle', 'States', 'Rooms'];
+  const order = ['Adult', 'Lifestyle', 'States', 'Rooms'];
   const groups = {};
   for (const r of rooms) {
     if (r.private) continue; // private rooms live in the spy section for the owner
