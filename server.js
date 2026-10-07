@@ -87,6 +87,8 @@ async function loadPersistedBans() {
 
 // ---- Site owner + welcome letterhead ----
 const SITE_OWNER = process.env.SITE_OWNER || 'ShadRick';
+// SHA-256 hex of the owner password. If unset, the owner nickname cannot log in at all (fail-secure).
+const OWNER_PASSWORD_HASH = process.env.OWNER_PASSWORD_HASH || '';
 let siteBanner = {
   title: '👑 Welcome to CamWave',
   body: `This is ${SITE_OWNER}'s house.\n\nBe cool: no mic hogging, no spam, no hate, no creeping.\nBreak the rules and you'll be warned — then muted, kicked, or banned.\nThe boss is always watching. 👀`,
@@ -1205,9 +1207,19 @@ function handleMessage(ws, raw) {
       const age = parseInt(msg.age, 10);
       if (!Number.isFinite(age) || age < 13 || age > 120)
         return send(ws, { type: 'error', message: 'Enter your age (13–120).' });
+      // owner authentication: nickname alone is never enough
+      let isOwner = false;
+      if (name === SITE_OWNER) {
+        if (!OWNER_PASSWORD_HASH)
+          return send(ws, { type: 'error', message: 'Owner login is not configured. Pick a different nickname.' });
+        const h = crypto.createHash('sha256').update(String(msg.ownerPass || '')).digest('hex');
+        if (h !== OWNER_PASSWORD_HASH)
+          return send(ws, { type: 'error', message: 'Wrong owner password.' });
+        isOwner = true;
+      }
       const user = { id, name, gender, age, ip: ws._ip, ws, status: 'online', roomId: null,
                      contacts: new Set(), muted: false, micLive: false, videoOn: false, talking: false, talkTimer: null,
-                     siteOwner: name === SITE_OWNER, photo: null, sharingScreen: false,
+                     siteOwner: isOwner, photo: null, sharingScreen: false,
                      verifiedCam: false, camWarnTimer: null, camKickTimer: null };
       ws._user = user;
       users.set(id, user);

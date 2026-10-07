@@ -242,7 +242,8 @@ function doLogin() {
   const age = parseInt($('age-input').value, 10);
   if (!Number.isFinite(age) || age < 13 || age > 120) { $('login-error').textContent = 'Enter your age (13+).'; return; }
   $('login-error').textContent = '';
-  wsSend({ type: 'hello', name, gender, age });
+  const ownerPass = $('ownerpass-input') ? $('ownerpass-input').value : '';
+  wsSend({ type: 'hello', name, gender, age, ownerPass });
 }
 $('status-select').onchange = (e) => wsSend({ type: 'set-status', status: e.target.value });
 
