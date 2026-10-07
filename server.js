@@ -2012,14 +2012,14 @@ function joinRoom(u, roomId) {
 
   // Ban checks (per-room, this session)
   const banRec = room.bans.get(u.id);
-  if (banRec) return send(u.ws, { type: 'error', message: `You are banned from "${room.name}".` });
+  if (banRec) return send(u.ws, { type: 'ban-reject', scope: 'room', room: room.name });
   if (u.ip && u.ip !== 'unknown' && room.ipBans.has(u.ip))
-    return send(u.ws, { type: 'error', message: `Your IP is banned from "${room.name}".` });
+    return send(u.ws, { type: 'ban-reject', scope: 'room-ip', room: room.name });
   // Persistent global bans (survive restarts)
   if (u.ip && u.ip !== 'unknown' && gIpBans.has(u.ip))
-    return send(u.ws, { type: 'error', message: 'Your IP is banned from CamWave.' });
+    return send(u.ws, { type: 'ban-reject', scope: 'global-ip' });
   if (u.name && gNameBans.has(u.name.toLowerCase()))
-    return send(u.ws, { type: 'error', message: 'You are banned from CamWave.' });
+    return send(u.ws, { type: 'ban-reject', scope: 'global' });
 
   if (u.roomId) doLeaveRoom(u);
   u.roomId = roomId;

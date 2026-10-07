@@ -223,6 +223,23 @@ function onServer(m) {
       showBlastModal('👢 KICKED', kicks[Math.floor(Math.random() * kicks.length)]);
       break;
     }
+    case 'ban-reject': {
+      const msgs = [
+        '🚫 STILL BANNED! Did you really think that changed? Take a hike! 🥾',
+        '🚫 Nope. Still not welcome here. The ban didn\'t magically lift. ✋',
+        '🚫 Persistent, aren\'t you? The answer is still NO. Go away! 🚪',
+        '🚫 This is your sign to stop trying. BANNED means BANNED. 🛑',
+        '🚫 Knocking again? Nobody\'s answering. Take the hint! 💡',
+        '🚫 You\'ve been rejected more times than a bad pickup line. Move on! 💔',
+      ];
+      const scope = m.scope === 'room' || m.scope === 'room-ip' ? ` from "${m.room}"` : ' from CamWave';
+      blastToxicNoise();
+      showBlastModal('🚫 STILL BANNED',
+        msgs[Math.floor(Math.random() * msgs.length)] + `\n\nYou are banned${scope}.`);
+      // double-tap: another one for good measure
+      setTimeout(() => toast('🚫 ' + msgs[Math.floor(Math.random() * msgs.length)]), 1500);
+      break;
+    }
     case 'banned': {
       leaveRoomUI();
       const bans = [
