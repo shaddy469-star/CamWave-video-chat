@@ -249,6 +249,87 @@ body {
 @keyframes gift-pop { 0% { transform: scale(0) rotate(-15deg); } 100% { transform: scale(1) rotate(0); } }
 @keyframes gift-shake { 0%, 100% { transform: translate(0); } 25% { transform: translate(-5px, 3px); } 50% { transform: translate(4px, -4px); } 75% { transform: translate(-3px, -2px); } }
 
+/* TikTok-style combo gift banners (small gifts) */
+#gift-stack {
+  position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+  z-index: 9000; display: flex; flex-direction: column; gap: 6px;
+  pointer-events: none; width: min(92vw, 380px);
+}
+.gift-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,.75); border: 1px solid rgba(255,255,255,.2);
+  border-radius: 24px; padding: 6px 14px 6px 8px;
+  animation: gb-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+  backdrop-filter: blur(4px);
+}
+.gift-banner.tier2 { border-color: #ffc107; box-shadow: 0 0 14px rgba(255,193,7,.35); }
+.gb-emoji { font-size: 1.8em; }
+.gb-text { flex: 1; font-size: 0.82em; color: #fff; }
+.gb-text b { color: #ffd54f; }
+.gcombo {
+  background: linear-gradient(135deg, #ff4081, #ff9800); color: #fff;
+  font-weight: 900; border-radius: 12px; padding: 2px 8px; font-size: 0.85em;
+}
+.gcombo.bump { animation: gb-bump 0.3s; }
+@keyframes gb-in { from { transform: translateY(-24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes gb-bump { 0% { transform: scale(1); } 50% { transform: scale(1.45); } 100% { transform: scale(1); } }
+
+/* legendary gift cinematics */
+#gift-overlay.legendary { background: rgba(0, 0, 10, 0.72); }
+.legend-flash {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,215,0,.35) 0%, transparent 60%);
+  animation: legend-flash 1.2s ease-out;
+}
+@keyframes legend-flash { 0% { opacity: 0; transform: scale(0.5); } 30% { opacity: 1; } 100% { opacity: 0.4; transform: scale(1.6); } }
+.legend-actor { font-size: 7em; z-index: 2; filter: drop-shadow(0 0 30px gold); }
+.legend-caption {
+  font-size: 2em; font-weight: 900; color: #ffd54f; z-index: 2;
+  text-shadow: 0 0 24px #ff6f00, 0 2px 8px #000; letter-spacing: 3px;
+  animation: gift-pop 0.6s cubic-bezier(0.2, 2, 0.4, 1); margin-top: 8px;
+}
+.scene-lion { animation: lion-walk 4.5s ease-in-out; }
+@keyframes lion-walk {
+  0% { transform: translateX(-60vw) scale(0.6); }
+  40% { transform: translateX(0) scale(1.4); }
+  60% { transform: translateX(0) scale(1.4) rotate(-6deg); }
+  100% { transform: translateX(60vw) scale(0.8); }
+}
+.scene-universe { animation: universe-burst 5s ease-out; }
+@keyframes universe-burst {
+  0% { transform: scale(0) rotate(0); opacity: 0; }
+  25% { transform: scale(1.8) rotate(180deg); opacity: 1; }
+  60% { transform: scale(1.4) rotate(360deg); }
+  100% { transform: scale(1.1) rotate(540deg); opacity: 0.9; }
+}
+.scene-yacht { animation: yacht-sail 5s ease-in-out; }
+@keyframes yacht-sail {
+  0% { transform: translateX(-70vw) translateY(10px); }
+  25% { transform: translateX(-20vw) translateY(-12px); }
+  50% { transform: translateX(20vw) translateY(10px); }
+  75% { transform: translateX(45vw) translateY(-8px); }
+  100% { transform: translateX(70vw) translateY(6px); }
+}
+.scene-car { animation: car-zoom 3.2s ease-in; }
+@keyframes car-zoom {
+  0% { transform: translateX(-70vw) scale(0.7); }
+  70% { transform: translateX(10vw) scale(1.5); }
+  100% { transform: translateX(70vw) scale(1.1); }
+}
+.scene-jet { animation: jet-fly 4s ease-in-out; }
+@keyframes jet-fly {
+  0% { transform: translate(-60vw, 30vh) rotate(-12deg) scale(0.8); }
+  50% { transform: translate(0, -6vh) rotate(-4deg) scale(1.4); }
+  100% { transform: translate(60vw, -30vh) rotate(8deg) scale(0.9); }
+}
+.scene-ferris { animation: ferris-spin 5s linear; }
+@keyframes ferris-spin {
+  0% { transform: scale(0.6) rotate(0); }
+  30% { transform: scale(1.5) rotate(180deg); }
+  100% { transform: scale(1.2) rotate(720deg); }
+}
+.scene-default { animation: gift-pop 0.6s cubic-bezier(0.2, 2, 0.4, 1); }
+
 /* coin shop */
 .coin-packages { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .coin-pack {

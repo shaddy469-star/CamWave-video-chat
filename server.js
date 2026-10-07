@@ -178,6 +178,12 @@ function claimDaily(name) {
 /* ---- real-money coin shop (Stripe) ----
    Money goes directly to YOUR Stripe account (your keys = your bank).
    Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET in Render env to activate. */
+function giftTier(cost) {
+  if (cost >= 10000) return 4;  // legendary: full cinematic
+  if (cost >= 1000) return 3;   // grand: full-screen banner
+  if (cost >= 100) return 2;    // medium banner
+  return 1;                     // small banner + combos
+}
 const COIN_PACKAGES = [
   { id: 'c70',   coins: 70,    price: 99,    tag: 'Starter' },
   { id: 'c350',  coins: 350,   price: 399,   tag: 'Popular' },
@@ -1079,7 +1085,7 @@ function handleMessage(ws, raw) {
       const newBal = addCoins(u.name, -gift.cost);
       send(ws, { type: 'coins', balance: newBal });
       const evt = { type: 'gift-event', from: u.id, fromName: u.name, to: target.id, toName: target.name,
-        gift: { id: gift.id, emoji: gift.emoji, name: gift.name, cost: gift.cost }, ts: Date.now() };
+        gift: { id: gift.id, emoji: gift.emoji, name: gift.name, cost: gift.cost, tier: giftTier(gift.cost) }, ts: Date.now() };
       broadcastRoom(u.roomId, evt);
       addHistory(u.roomId, { type: 'chat-msg', from: 'gift', name: '🎁 Gifts', role: 'member',
         text: `${u.name} sent ${target.name} ${gift.emoji} ${gift.name}!`, ts: Date.now(), bot: true });

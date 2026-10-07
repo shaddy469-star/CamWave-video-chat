@@ -827,19 +827,51 @@ if (new URLSearchParams(location.search).get('coins') === 'success') {
   setTimeout(() => toast('🎉 Payment complete — your coins are on the way!'), 1500);
 }
 
+/* TikTok-style tiered gift animations:
+   tier 1-2: compact combo banners · tier 3: full-screen banner · tier 4: legendary cinematic */
+const giftCombos = new Map(); // senderId:giftId -> {count, el, timer}
 function giftCelebration(evt) {
+  const tier = (evt.gift && evt.gift.tier) || 1;
+  if (tier <= 2) return giftBanner(evt, tier);
+  if (tier === 3) return giftFullscreen(evt);
+  return giftLegendary(evt);
+}
+function giftBanner(evt, tier) {
+  const key = evt.from + ':' + evt.gift.id;
+  const existing = giftCombos.get(key);
+  if (existing) {
+    existing.count++;
+    const badge = existing.el.querySelector('.gcombo');
+    if (badge) {
+      badge.textContent = 'x' + existing.count;
+      badge.classList.remove('bump'); void badge.offsetWidth; badge.classList.add('bump');
+    }
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => { existing.el.remove(); giftCombos.delete(key); }, 4000);
+    return;
+  }
+  let stack = $('gift-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'gift-stack';
+    document.body.appendChild(stack);
+  }
+  const el = document.createElement('div');
+  el.className = 'gift-banner tier' + tier;
+  el.innerHTML = `<span class="gb-emoji">${evt.gift.emoji}</span>
+    <span class="gb-text"><b>${esc(evt.fromName)}</b> sent <b>${esc(evt.toName)}</b> ${esc(evt.gift.name)}</span>
+    <span class="gcombo">x1</span>`;
+  stack.appendChild(el);
+  while (stack.children.length > 4) stack.firstChild.remove();
+  const rec = { count: 1, el, timer: setTimeout(() => { el.remove(); giftCombos.delete(key); }, 4000) };
+  giftCombos.set(key, rec);
+}
+function giftFullscreen(evt) {
   const ov = document.createElement('div');
   ov.id = 'gift-overlay';
-  const em = document.createElement('div');
-  em.className = 'gift-pop';
-  em.textContent = evt.gift.emoji;
-  const txt = document.createElement('div');
-  txt.className = 'gift-text';
-  txt.textContent = `${evt.fromName} sent ${evt.toName}`;
-  const nm = document.createElement('div');
-  nm.className = 'gift-name';
-  nm.textContent = `${evt.gift.emoji} ${evt.gift.name}!`;
-  ov.appendChild(em); ov.appendChild(txt); ov.appendChild(nm);
+  ov.innerHTML = `<div class="gift-pop">${evt.gift.emoji}</div>
+    <div class="gift-text">${esc(evt.fromName)} sent ${esc(evt.toName)}</div>
+    <div class="gift-name">${evt.gift.emoji} ${esc(evt.gift.name)}!</div>`;
   const bits = [evt.gift.emoji, '✨', '🎉', '💖'];
   for (let i = 0; i < 22; i++) {
     const s = document.createElement('span');
@@ -854,6 +886,46 @@ function giftCelebration(evt) {
   const kill = () => { if (ov.parentNode) ov.remove(); };
   ov.onclick = kill;
   setTimeout(kill, 4200);
+}
+const LEGENDARY_SCENES = {
+  lion:     { cls: 'scene-lion',     caption: 'ROAR! 🦁' },
+  universe: { cls: 'scene-universe', caption: 'OUT OF THIS WORLD! 🌠' },
+  yacht:    { cls: 'scene-yacht',    caption: 'SAILING IN STYLE! 🛥️' },
+  sportscar:{ cls: 'scene-car',      caption: 'VROOM! 🏎️' },
+  jet:      { cls: 'scene-jet',      caption: 'TAKING OFF! 🛩️' },
+  ferris:   { cls: 'scene-ferris',   caption: 'ROUND AND ROUND! 🎡' },
+};
+function giftLegendary(evt) {
+  const scene = LEGENDARY_SCENES[evt.gift.id] || { cls: 'scene-default', caption: 'LEGENDARY! ✨' };
+  const ov = document.createElement('div');
+  ov.id = 'gift-overlay';
+  ov.classList.add('legendary');
+  ov.innerHTML = `<div class="legend-flash"></div>
+    <div class="legend-actor ${scene.cls}">${evt.gift.emoji}</div>
+    <div class="legend-caption">${scene.caption}</div>
+    <div class="gift-text">${esc(evt.fromName)} sent ${esc(evt.toName)}</div>
+    <div class="gift-name">${evt.gift.emoji} ${esc(evt.gift.name)}!</div>`;
+  document.body.appendChild(ov);
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC(); if (ctx.resume) ctx.resume();
+      const t = ctx.currentTime;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + i * 0.12);
+        g.gain.exponentialRampToValueAtTime(0.18, t + i * 0.12 + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.5);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.6);
+      });
+      setTimeout(() => { try { ctx.close(); } catch {} }, 2500);
+    }
+  } catch {}
+  const kill = () => { if (ov.parentNode) ov.remove(); };
+  ov.onclick = kill;
+  setTimeout(kill, 6000);
 }
 /* ---- private cam invites ---- */
 let pendingInvite = null;
