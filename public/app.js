@@ -49,6 +49,7 @@ function onServer(m) {
       $('my-name').textContent = m.name;
       $('siteowner-btn').classList.toggle('hidden', !S.siteOwner);
       if (m.siteBanner) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
+      if (pendingPhoto) { S.myPhoto = pendingPhoto; wsSend({ type: 'set-photo', dataUrl: pendingPhoto }); pendingPhoto = null; }
       wsSend({ type: 'get-contacts' });
       break;
     case 'site-banner':
@@ -57,6 +58,16 @@ function onServer(m) {
       showWarned(m); break;
     case 'mod-banner':
       showModBanner(m); break;
+    case 'user-photo': {
+      const u = S.roomUsers.get(m.id);
+      if (u) { u.photo = m.photo; renderVideoGrid(); renderUserList(); }
+      break;
+    }
+    case 'user-screen': {
+      const u = S.roomUsers.get(m.id);
+      if (u) { u.sharingScreen = m.sharing; renderVideoGrid(); }
+      break;
+    }
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -77,6 +88,7 @@ function onServer(m) {
       renderUserList(); refreshModUI(); break;
     case 'signal': onSignal(m.from, m.data); break;
     case 'chat-msg': addChatMsg(m); break;
+    case 'chat-media': addMediaMsg(m); break;
     case 'dm-msg': onDmMsg(m); break;
     case 'dm-sent': onDmSent(m); break;
     case 'dm-history':
@@ -446,6 +458,54 @@ $('mic-toggle').onclick = () => {
     toast(S.room ? '🔊 Push-to-talk mode: hold the TALK button (or Space) to speak.' : '');
   }
 };
+
+/* ============================== screen sharing ============================== */
+$('screen-btn').onclick = () => { S.sharingScreen ? stopScreenShare() : startScreenShare(); };
+function updateScreenBtn() {
+  $('screen-btn').classList.toggle('active', !!S.sharingScreen);
+  $('screen-btn').title = S.sharingScreen ? 'Stop sharing' : 'Share screen';
+}
+async function startScreenShare() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia)
+    return toast('Screen sharing is not supported in this browser.');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch { return; } // user cancelled
+  const vTrack = stream.getVideoTracks()[0];
+  if (!vTrack) { stream.getTracks().forEach(t => { try { t.stop(); } catch {} }); return toast('No video in that share.'); }
+  S.sharingScreen = true;
+  S.screenStream = stream;
+  const aTrack = stream.getAudioTracks()[0];
+  for (const [, p] of S.peers) {
+    try {
+      const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (sender) await sender.replaceTrack(vTrack);
+      if (aTrack && !p.screenAudioSender) p.screenAudioSender = p.pc.addTrack(aTrack, stream);
+    } catch (e) { console.warn(e); }
+  }
+  vTrack.onended = stopScreenShare; // browser's own "Stop sharing" button
+  wsSend({ type: 'screen-share', sharing: true });
+  renderSelfTile(); updateScreenBtn();
+  toast('🖥️ You are sharing your screen with the room.');
+}
+function stopScreenShare() {
+  if (!S.sharingScreen) return;
+  S.sharingScreen = false;
+  const camTrack = (S.localStream && S.camOn) ? S.localStream.getVideoTracks()[0] : null;
+  for (const [, p] of S.peers) {
+    (async () => {
+      try {
+        const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) await sender.replaceTrack(camTrack);
+        if (p.screenAudioSender) { p.pc.removeTrack(p.screenAudioSender); p.screenAudioSender = null; }
+      } catch (e) { console.warn(e); }
+    })();
+  }
+  if (S.screenStream) { S.screenStream.getTracks().forEach(t => { try { t.stop(); } catch {} }); S.screenStream = null; }
+  wsSend({ type: 'screen-share', sharing: false });
+  renderSelfTile(); updateScreenBtn();
+}
 $('sound-toggle').onclick = () => {
   S.soundOn = !S.soundOn;
   $('sound-toggle').textContent = S.soundOn ? '🔔' : '🔕';
@@ -495,7 +555,9 @@ function createPeer(peerId, offerer) {
   const peer = { pc, stream: new MediaStream() };
   S.peers.set(peerId, peer);
 
-  if (S.localStream) {
+  if (S.sharingScreen && S.screenStream) {
+    for (const t of S.screenStream.getTracks()) pc.addTrack(t, S.screenStream);
+  } else if (S.localStream) {
     for (const t of S.localStream.getTracks()) pc.addTrack(t, S.localStream);
   } else {
     try {
@@ -510,7 +572,12 @@ function createPeer(peerId, offerer) {
 
   pc.ontrack = (e) => {
     for (const t of e.streams[0].getTracks()) {
-      if (!peer.stream.getTrackById(t.id)) peer.stream.addTrack(t);
+      if (!peer.stream.getTrackById(t.id)) {
+        peer.stream.addTrack(t);
+        t.onmute = () => renderVideoGrid();
+        t.onunmute = () => renderVideoGrid();
+        t.onended = () => renderVideoGrid();
+      }
     }
     renderVideoGrid();
   };
@@ -556,12 +623,21 @@ function renderSelfTile() {
     tile.className = 'video-tile'; tile.id = 'tile-self';
     $('video-grid').prepend(tile);
   }
-  tile.innerHTML = `<div class="video-label">📹 You ${S.camOn ? '' : '(cam off)'}</div>`;
-  if (S.localStream && S.camOn) {
+  tile.innerHTML = `<div class="video-label">${S.sharingScreen ? '🖥️ You are sharing' : `📹 You ${S.camOn ? '' : '(cam off)'}`}</div>`;
+  if (S.sharingScreen && S.screenStream) {
+    const v = document.createElement('video');
+    v.autoplay = true; v.playsinline = true; v.muted = true;
+    v.srcObject = S.screenStream;
+    tile.prepend(v);
+  } else if (S.localStream && S.camOn) {
     const v = document.createElement('video');
     v.autoplay = true; v.playsinline = true; v.muted = true;
     v.srcObject = S.localStream;
     tile.prepend(v);
+  } else if (S.myPhoto) {
+    const img = document.createElement('img');
+    img.src = S.myPhoto; img.alt = 'your photo'; img.className = 'tile-photo';
+    tile.prepend(img);
   }
 }
 
@@ -580,7 +656,9 @@ function renderVideoGrid() {
       tile.onclick = () => spotlight(id);
       $('video-grid').appendChild(tile);
     }
-    const hasVideo = peer.stream.getVideoTracks().length > 0;
+    const vTracks = peer.stream.getVideoTracks();
+    const liveTrack = vTracks.find(t => t.readyState === 'live' && !t.muted);
+    const hasVideo = !!liveTrack;
     tile.classList.toggle('speaking', !!(u && u.talking));
     tile.classList.toggle('role-owner', !!(u && u.role === 'owner'));
     tile.classList.toggle('role-admin', !!(u && u.role === 'admin'));
@@ -591,9 +669,21 @@ function renderVideoGrid() {
       v.srcObject = peer.stream;
       tile.prepend(v);
     }
+    // photo fallback when their camera is off
+    const existingPhoto = tile.querySelector('.tile-photo');
+    if (!hasVideo && u && u.photo) {
+      if (!existingPhoto) {
+        const img = document.createElement('img');
+        img.className = 'tile-photo'; img.alt = '';
+        tile.prepend(img);
+      }
+      tile.querySelector('.tile-photo').src = u.photo;
+    } else if (existingPhoto) {
+      existingPhoto.remove();
+    }
     let label = tile.querySelector('.video-label');
     if (!label) { label = document.createElement('div'); label.className = 'video-label'; tile.appendChild(label); }
-    label.innerHTML = `${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
+    label.innerHTML = `${u && u.sharingScreen ? '🖥️ ' : ''}${esc(u ? u.name : id)} ${u && u.muted ? '🔇' : ''} ${u && ROLE_LABEL[u.role] ? `<span class="role role-${u.role}">${ROLE_LABEL[u.role]}</span>` : ''}`;
     let mic = tile.querySelector('.mic-off-icon');
     if (u && u.muted && !mic) { mic = document.createElement('div'); mic.className = 'mic-off-icon'; mic.textContent = '🔇'; tile.appendChild(mic); }
     if (u && !u.muted && mic) mic.remove();
@@ -648,6 +738,147 @@ function addChatMsg(m) {
   el.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
   $('chat-log').appendChild(el);
   $('chat-log').scrollTop = 1e6;
+}
+function addMediaMsg(m) {
+  const el = document.createElement('div');
+  el.className = 'chat-msg';
+  const head = document.createElement('div');
+  head.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span>`;
+  el.appendChild(head);
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-media';
+  if (m.kind === 'video') {
+    const v = document.createElement('video');
+    v.src = m.dataUrl; v.controls = true; v.preload = 'metadata'; v.playsInline = true;
+    wrap.appendChild(v);
+  } else {
+    const img = document.createElement('img');
+    img.src = m.dataUrl; img.alt = 'shared photo'; img.loading = 'lazy';
+    img.onclick = () => openLightbox(m.dataUrl);
+    wrap.appendChild(img);
+  }
+  el.appendChild(wrap);
+  $('chat-log').appendChild(el);
+  $('chat-log').scrollTop = 1e6;
+}
+function openLightbox(src) {
+  $('lightbox-img').src = src;
+  $('lightbox-modal').classList.remove('hidden');
+}
+$('lightbox-close').onclick = () => { $('lightbox-modal').classList.add('hidden'); $('lightbox-img').src = ''; };
+$('lightbox-modal').onclick = (e) => { if (e.target.id === 'lightbox-modal') $('lightbox-close').onclick(); };
+
+/* ---- photo / video sharing ---- */
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+}
+function compressImage(file, maxDim = 1280, quality = 0.82) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxDim) { const s = maxDim / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(img.src);
+        c.toBlob(b => b ? res(b) : rej(new Error('compress failed')), 'image/jpeg', quality);
+      } catch (e) { rej(e); }
+    };
+    img.onerror = () => rej(new Error('bad image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/* ---- profile photo (shown instead of camera) ---- */
+let pendingPhoto = null; // chosen at login, sent after welcome
+async function pickPhoto(file, previewEl) {
+  if (!file || !file.type.startsWith('image/')) return null;
+  try {
+    const blob = await compressImage(file, 512, 0.8);
+    const du = await blobToDataURL(blob);
+    if (previewEl) { previewEl.src = du; previewEl.classList.remove('hidden'); }
+    return du;
+  } catch { toast('Could not use that photo.'); return null; }
+}
+$('login-photo-btn').onclick = () => $('login-photo-input').click();
+$('login-photo-input').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  pendingPhoto = await pickPhoto(f, $('login-photo-preview'));
+};
+$('photo-btn').onclick = () => $('photo-input').click();
+$('photo-input').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  const du = await pickPhoto(f, null);
+  if (du) { S.myPhoto = du; wsSend({ type: 'set-photo', dataUrl: du }); renderSelfTile(); toast('📷 Profile photo updated.'); }
+};
+$('chat-photo-btn').onclick = () => $('chat-photo-input').click();
+$('chat-video-btn').onclick = () => $('chat-video-input').click();
+$('chat-photo-input').onchange = async (e) => {
+  const files = [...e.target.files].filter(f => f.type.startsWith('image/')).slice(0, 6);
+  e.target.value = '';
+  if (!files.length) return;
+  toast(`📷 Sharing ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+  for (const f of files) {
+    try {
+      const blob = await compressImage(f);
+      wsSend({ type: 'chat-media', kind: 'image', dataUrl: await blobToDataURL(blob) });
+    } catch { toast('Could not share a photo.'); }
+  }
+};
+$('chat-video-input').onchange = async (e) => {
+  const f = [...e.target.files].find(f => f.type.startsWith('video/'));
+  e.target.value = '';
+  if (!f) return;
+  if (f.size > 15 * 1024 * 1024) return toast('Video too big — max ~15MB.');
+  toast('🎬 Sharing video…');
+  try { wsSend({ type: 'chat-media', kind: 'video', dataUrl: await blobToDataURL(f) }); }
+  catch { toast('Could not share that video.'); }
+};
+
+/* ---- record a video clip from camera ---- */
+let mediaRecorder = null, recordChunks = [], recordTimer = null, recordTick = null, recordSecs = 0;
+$('chat-record-btn').onclick = () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') { stopRecording(); return; }
+  startRecording();
+};
+async function startRecording() {
+  let stream = S.localStream;
+  if (!stream || !stream.getVideoTracks().length) {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); }
+    catch { return toast('Camera needed to record a clip.'); }
+  }
+  try {
+    const mime = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+    recordChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1500000 });
+  } catch { return toast('Recording not supported here.'); }
+  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recordChunks.push(e.data); };
+  mediaRecorder.onstop = shareRecording;
+  mediaRecorder.start();
+  recordSecs = 0;
+  $('rec-time').textContent = '0:00';
+  $('rec-indicator').classList.remove('hidden');
+  recordTick = setInterval(() => { recordSecs++; $('rec-time').textContent = `${Math.floor(recordSecs/60)}:${String(recordSecs%60).padStart(2,'0')}`; }, 1000);
+  recordTimer = setTimeout(stopRecording, 30000);
+  toast('🔴 Recording — tap ⏺️ again or Stop to share (max 30s).');
+}
+function stopRecording() {
+  clearTimeout(recordTimer); clearInterval(recordTick);
+  $('rec-indicator').classList.add('hidden');
+  if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+  else { mediaRecorder = null; }
+}
+$('rec-stop').onclick = stopRecording;
+function shareRecording() {
+  mediaRecorder = null;
+  const blob = new Blob(recordChunks, { type: 'video/webm' });
+  recordChunks = [];
+  if (!blob.size) return;
+  if (blob.size > 20 * 1024 * 1024) return toast('Clip too big to share.');
+  toast('🎬 Sharing your clip…');
+  blobToDataURL(blob).then(du => wsSend({ type: 'chat-media', kind: 'video', dataUrl: du }))
+    .catch(() => toast('Could not share the clip.'));
 }
 function addSysMsg(text) {
   if ($('view-room').classList.contains('hidden')) return;

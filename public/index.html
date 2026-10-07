@@ -41,6 +41,11 @@
       <input id="age-input" type="number" min="13" max="120" placeholder="Age">
     </div>
     <button id="join-btn" class="btn-primary">Enter the Wave 🌊</button>
+    <div class="login-row">
+      <button id="login-photo-btn" class="btn-ghost" type="button">📷 Profile photo (optional)</button>
+      <input type="file" id="login-photo-input" accept="image/*" class="hidden">
+    </div>
+    <img id="login-photo-preview" class="hidden" alt="profile preview">
     <p id="login-error" class="error"></p>
     <p class="fineprint">Free. No signup. Be kind — room owners can mute, kick or ban.</p>
   </div>
@@ -53,6 +58,8 @@
     <div class="me">
       <span id="my-name"></span>
       <button id="siteowner-btn" class="hidden" title="Edit welcome letterhead">👑</button>
+      <button id="photo-btn" title="Set profile photo">📷</button>
+      <input type="file" id="photo-input" accept="image/*" class="hidden">
       <select id="status-select" title="Your status">
         <option value="online">🟢 Online</option>
         <option value="away">🟡 Away</option>
@@ -92,6 +99,7 @@
         <div id="video-grid" class="video-grid"></div>
         <div class="media-controls">
           <button id="cam-toggle" class="ctl" title="Camera">🎥</button>
+          <button id="screen-btn" class="ctl" title="Share screen">🖥️</button>
           <button id="mic-toggle" class="ctl" title="Microphone">🎙️</button>
           <button id="ptt-btn" class="ctl ptt" title="Hold to talk">🔊 HOLD TO TALK</button>
           <button id="dj-btn" class="ctl hidden" title="DJ mode">🎧 DJ</button>
@@ -112,9 +120,15 @@
           <h3>💬 Chat</h3>
           <div id="chat-log" class="chat-log"></div>
           <div class="chat-input-row">
+            <button id="chat-photo-btn" class="btn-ghost" title="Share photos">📷</button>
+            <button id="chat-video-btn" class="btn-ghost" title="Share a video">🎬</button>
+            <button id="chat-record-btn" class="btn-ghost" title="Record a video clip">⏺️</button>
             <input id="chat-input" maxlength="500" placeholder="Say something… (😀 emoji work)">
             <button id="chat-send" class="btn-primary">Send</button>
+            <input type="file" id="chat-photo-input" accept="image/*" multiple class="hidden">
+            <input type="file" id="chat-video-input" accept="video/*" class="hidden">
           </div>
+          <div id="rec-indicator" class="hidden">🔴 <span id="rec-time">0:00</span> <button id="rec-stop" class="btn-danger">Stop & share</button></div>
         </div>
       </div>
     </div>
@@ -220,6 +234,14 @@
         <button id="sb-save" class="btn-primary">💾 Save</button>
       </div>
       <div class="modal-actions"><button id="sb-close" class="btn-ghost">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ===== LIGHTBOX ===== -->
+  <div id="lightbox-modal" class="modal hidden">
+    <div class="lightbox-wrap">
+      <img id="lightbox-img" alt="photo">
+      <button id="lightbox-close" class="btn-danger">✕ Close</button>
     </div>
   </div>
 </div>

@@ -113,7 +113,8 @@ function rankOf(room, userId) { return ROLE_RANK[roleOf(room, userId)] ?? 0; }
 
 function publicUser(u) {
   return { id: u.id, name: u.name, gender: u.gender, age: u.age, status: u.status, muted: !!u.muted,
-           micLive: !!u.micLive, videoOn: !!u.videoOn, talking: !!u.talking };
+           micLive: !!u.micLive, videoOn: !!u.videoOn, talking: !!u.talking, photo: u.photo || null,
+           sharingScreen: !!u.sharingScreen };
 }
 function roomSummary(r) {
   let count = 0;
@@ -440,7 +441,7 @@ function handleMessage(ws, raw) {
         return send(ws, { type: 'error', message: 'Enter your age (13–120).' });
       const user = { id, name, gender, age, ip: ws._ip, ws, status: 'online', roomId: null,
                      contacts: new Set(), muted: false, micLive: false, videoOn: false, talking: false, talkTimer: null,
-                     siteOwner: name === SITE_OWNER };
+                     siteOwner: name === SITE_OWNER, photo: null, sharingScreen: false };
       ws._user = user;
       users.set(id, user);
       nameToId.set(name.toLowerCase(), id);
@@ -532,6 +533,22 @@ function handleMessage(ws, raw) {
       break;
     }
 
+    case 'chat-media': {
+      if (!u.roomId) return;
+      const kind = msg.kind === 'video' ? 'video' : 'image';
+      const dataUrl = String(msg.dataUrl || '');
+      if (!dataUrl.startsWith('data:')) return;
+      // ~20MB cap on the encoded string (≈15MB file)
+      if (dataUrl.length > 20 * 1024 * 1024)
+        return send(ws, { type: 'error', message: 'That file is too big (max ~15MB).' });
+      if (kind === 'image' && !/^data:image\/(jpeg|png|gif|webp)/i.test(dataUrl)) return;
+      if (kind === 'video' && !/^data:video\//i.test(dataUrl)) return;
+      const room = rooms.get(u.roomId);
+      broadcastRoom(u.roomId, { type: 'chat-media', from: u.id, name: u.name,
+        role: roleOf(room, u.id), kind, dataUrl, ts: Date.now() });
+      break;
+    }
+
     case 'dm': {
       const peer = users.get(msg.to);
       const text = String(msg.text || '').slice(0, 500).trim();
@@ -596,6 +613,26 @@ function handleMessage(ws, raw) {
       } else {
         send(ws, { type: 'site-banner', banner: siteBanner });
       }
+      break;
+    }
+
+    case 'set-photo': {
+      const dataUrl = String(msg.dataUrl || '');
+      if (!dataUrl) {
+        u.photo = null;
+      } else {
+        if (!/^data:image\/(jpeg|png|gif|webp)/i.test(dataUrl)) return;
+        if (dataUrl.length > 500 * 1024)
+          return send(ws, { type: 'error', message: 'Photo too big.' });
+        u.photo = dataUrl;
+      }
+      if (u.roomId) broadcastRoom(u.roomId, { type: 'user-photo', id: u.id, photo: u.photo });
+      break;
+    }
+
+    case 'screen-share': {
+      u.sharingScreen = !!msg.sharing;
+      if (u.roomId) broadcastRoom(u.roomId, { type: 'user-screen', id: u.id, sharing: u.sharingScreen }, u.id);
       break;
     }
 
