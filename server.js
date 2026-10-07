@@ -220,6 +220,7 @@ async function handleCreateCheckout(req, res) {
       params.append('cancel_url', APP_URL + '/');
       params.append('line_items[0][price_data][currency]', 'usd');
       params.append('line_items[0][price_data][product_data][name]', pkg.coins + ' CamWave Coins');
+      params.append('line_items[0][price_data][product_data][tax_code]', 'txcd_10103000'); // digital goods
       params.append('line_items[0][price_data][unit_amount]', String(pkg.price));
       params.append('line_items[0][quantity]', '1');
       params.append('client_reference_id', user.slice(0, 40));
