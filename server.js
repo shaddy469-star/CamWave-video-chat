@@ -100,6 +100,164 @@ function persistBanner() {
   persistWrite(upstash('SET', 'camwave:sitebanner', JSON.stringify(siteBanner)));
 }
 
+/* ============================== bots ==============================
+   TriviaBot: interactive trivia (!trivia, !score)
+   HypeBot: fresh content (!trending, !joke, !fact, !bots) */
+const BOT_TRIVIA = '🎲 TriviaBot';
+const BOT_HYPE = '🔥 HypeBot';
+
+async function fetchJson(url, opts = {}, timeoutMs = 8000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...opts, signal: ctl.signal,
+      headers: { 'User-Agent': 'CamWave/1.0', ...((opts && opts.headers) || {}) } });
+    if (!r.ok) throw new Error('http ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+function botSay(roomId, name, text) {
+  broadcastRoom(roomId, { type: 'chat-msg', from: 'bot', name, role: 'member', text, ts: Date.now(), bot: true });
+}
+
+// ---- trivia ----
+const triviaState = new Map(); // roomId -> {active, q, answers:Map, scores:Map, timer}
+const FALLBACK_QS = [
+  { question: 'What planet is known as the Red Planet?', options: ['Venus', 'Mars', 'Jupiter', 'Mercury'], correct: 1, category: 'Science' },
+  { question: 'How many players are on a soccer team (on the field)?', options: ['9', '10', '11', '12'], correct: 2, category: 'Sports' },
+  { question: 'What does "www" stand for?', options: ['World Wide Web', 'World Web Wide', 'Web World Wide', 'Wide World Web'], correct: 0, category: 'Tech' },
+  { question: 'Which ocean is the largest?', options: ['Atlantic', 'Indian', 'Arctic', 'Pacific'], correct: 3, category: 'Geography' },
+  { question: 'How many sides does a hexagon have?', options: ['5', '6', '7', '8'], correct: 1, category: 'Math' },
+  { question: 'What year did the first iPhone come out?', options: ['2005', '2007', '2009', '2010'], correct: 1, category: 'Tech' },
+];
+const htmlUnesc = s => String(s).replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+async function getTriviaQuestion() {
+  try {
+    const j = await fetchJson('https://opentdb.com/api.php?amount=1&type=multiple');
+    const q = j.results && j.results[0];
+    if (q && q.correct_answer) {
+      const correct = htmlUnesc(q.correct_answer);
+      const options = [...q.incorrect_answers.map(htmlUnesc), correct];
+      for (let i = options.length - 1; i > 0; i--) {
+        const r = Math.floor(Math.random() * (i + 1));
+        [options[i], options[r]] = [options[r], options[i]];
+      }
+      return { question: htmlUnesc(q.question), options, correct: options.indexOf(correct), category: htmlUnesc(q.category || 'General') };
+    }
+  } catch {}
+  const f = FALLBACK_QS[Math.floor(Math.random() * FALLBACK_QS.length)];
+  return { ...f, options: [...f.options] };
+}
+
+async function startTrivia(roomId) {
+  const st = triviaState.get(roomId);
+  if (st && st.active) { botSay(roomId, BOT_TRIVIA, 'A round is already going — answer with A, B, C or D!'); return; }
+  const q = await getTriviaQuestion();
+  const letters = ['A', 'B', 'C', 'D'];
+  const prev = triviaState.get(roomId);
+  const next = { active: true, q, answers: new Map(), scores: (prev && prev.scores) || new Map(), timer: null };
+  triviaState.set(roomId, next);
+  botSay(roomId, BOT_TRIVIA,
+    `🎲 TRIVIA [${q.category}]\n${q.question}\n${q.options.map((o, i) => `${letters[i]}) ${o}`).join('\n')}\n\nType A, B, C or D — 20 seconds!`);
+  next.timer = setTimeout(() => endTrivia(roomId), 20000);
+  if (next.timer.unref) next.timer.unref();
+}
+function endTrivia(roomId) {
+  const st = triviaState.get(roomId);
+  if (!st || !st.active) return;
+  st.active = false;
+  const letters = ['A', 'B', 'C', 'D'];
+  const winners = [];
+  for (const [uid, choice] of st.answers) {
+    if (choice === st.q.correct) {
+      const usr = users.get(uid);
+      const nm = usr ? usr.name : 'Someone';
+      winners.push(nm);
+      const s = st.scores.get(uid) || { name: nm, score: 0 };
+      s.score++; s.name = nm;
+      st.scores.set(uid, s);
+    }
+  }
+  const top = [...st.scores.values()].sort((a, b) => b.score - a.score).slice(0, 3)
+    .map((s, i) => `${i + 1}. ${s.name} (${s.score})`).join('   ');
+  botSay(roomId, BOT_TRIVIA,
+    `⏰ Time! Answer: ${letters[st.q.correct]}) ${st.q.options[st.q.correct]}\n` +
+    (winners.length ? `🎉 ${winners.join(', ')} got it!` : 'Nobody got it 😅') +
+    (top ? `\n🏆 Leaders: ${top}` : '') +
+    `\nType !trivia for another round.`);
+}
+function handleTriviaAnswer(roomId, user, text) {
+  const st = triviaState.get(roomId);
+  if (!st || !st.active) return false;
+  const t = text.trim().toUpperCase();
+  const letters = ['A', 'B', 'C', 'D'];
+  let idx = letters.indexOf(t);
+  if (idx < 0) idx = st.q.options.findIndex(o => o.toUpperCase() === t);
+  if (idx < 0 || idx > 3) return false;
+  st.answers.set(user.id, idx); // last answer counts
+  return true; // swallow letter answers so nobody copies
+}
+
+// ---- hype: trending / jokes / facts ----
+async function hypeTrending(roomId) {
+  try {
+    const j = await fetchJson('https://www.reddit.com/r/popular/top.json?limit=8&t=day');
+    const posts = ((j.data && j.data.children) || []).map(c => c.data).filter(p => p && p.title && !p.over_18);
+    if (posts.length) {
+      const p = posts[Math.floor(Math.random() * posts.length)];
+      return botSay(roomId, BOT_HYPE,
+        `🔥 Trending on Reddit  [r/${p.subreddit}]\n"${p.title}"\n⬆️ ${p.ups} upvotes · 💬 ${p.num_comments} comments`);
+    }
+  } catch {}
+  try {
+    const ids = await fetchJson('https://hacker-news.firebaseio.com/v0/topstories.json');
+    const id = ids[Math.floor(Math.random() * Math.min(10, ids.length))];
+    const s = await fetchJson(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+    if (s && s.title) return botSay(roomId, BOT_HYPE,
+      `🔥 Trending on Hacker News\n"${s.title}"\n⬆️ ${s.score} points · 💬 ${s.descendants || 0} comments`);
+  } catch {}
+  botSay(roomId, BOT_HYPE, '🔥 Could not fetch trends right now — try again in a bit!');
+}
+async function hypeJoke(roomId) {
+  try {
+    const j = await fetchJson('https://icanhazdadjoke.com/', { headers: { Accept: 'application/json' } });
+    if (j.joke) return botSay(roomId, BOT_HYPE, `😂 ${j.joke}`);
+  } catch {}
+  botSay(roomId, BOT_HYPE, '😂 Why do programmers prefer dark mode? Because light attracts bugs!');
+}
+async function hypeFact(roomId) {
+  try {
+    const j = await fetchJson('https://uselessfacts.jsph.pl/api/v2/facts/random?language=en');
+    if (j.text) return botSay(roomId, BOT_HYPE, `🧠 Random fact: ${j.text}`);
+  } catch {}
+  botSay(roomId, BOT_HYPE, '🧠 Random fact: Honey never spoils — archaeologists have tasted 3,000-year-old honey!');
+}
+function handleBotCommand(u, text) {
+  const roomId = u.roomId;
+  const cmd = text.slice(1).split(' ')[0].toLowerCase();
+  switch (cmd) {
+    case 'trivia':
+      startTrivia(roomId).catch(() => botSay(roomId, BOT_TRIVIA, 'Could not start trivia right now.'));
+      return true;
+    case 'score': {
+      const st = triviaState.get(roomId);
+      const scores = st ? [...st.scores.values()].sort((a, b) => b.score - a.score).slice(0, 5) : [];
+      botSay(roomId, BOT_TRIVIA, scores.length
+        ? '🏆 Trivia leaders:\n' + scores.map((s, i) => `${i + 1}. ${s.name} — ${s.score}`).join('\n')
+        : 'No scores yet. Type !trivia to play!');
+      return true;
+    }
+    case 'trending': hypeTrending(roomId); return true;
+    case 'joke': hypeJoke(roomId); return true;
+    case 'fact': hypeFact(roomId); return true;
+    case 'bots':
+      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — trivia leaderboard\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact');
+      return true;
+  }
+  return false;
+}
+
 const ROLE_RANK = { member: 0, moderator: 1, admin: 2, owner: 3 };
 
 function roleOf(room, userId) {
@@ -526,6 +684,8 @@ function handleMessage(ws, raw) {
       if (!u.roomId) return;
       const text = String(msg.text || '').slice(0, 500).trim();
       if (!text) return;
+      if (text.startsWith('!') && handleBotCommand(u, text)) break;
+      if (handleTriviaAnswer(u.roomId, u, text)) break;
       const room = rooms.get(u.roomId);
       const payload = { type: 'chat-msg', from: u.id, name: u.name,
         role: roleOf(room, u.id), text, ts: Date.now() };
