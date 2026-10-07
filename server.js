@@ -554,6 +554,22 @@ setInterval(() => {
 const AI_API_URL = process.env.AI_API_URL || 'https://api.openai.com/v1/chat/completions';
 const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const novaCooldown = new Map(); // userId -> timestamp
+/* Nova adapts her personality to the room she's in */
+function novaPersona(room) {
+  const name = room ? room.name : 'a CamWave chat room';
+  const id = room ? room.id : '';
+  const base = 'Keep answers under 80 words, fun and conversational.';
+  if (ADULT_ROOM_IDS.has(id))
+    return `You are Nova, a playful, flirty AI host in the adults-only video chat room "${name}". You're suggestive, teasing, and full of innuendo — late-night energy — but never explicit or graphic. ${base}`;
+  const n = (name || '').toLowerCase();
+  if (n.includes('dating') || n.includes('single'))
+    return `You are Nova, a witty dating-coach AI in "${name}". Give charming, fun dating advice and flirty banter. Wholesome but spicy. ${base}`;
+  if (n.includes('couple'))
+    return `You are Nova, a warm relationship AI in "${name}". Give sweet, fun advice for couples — date ideas, keeping the spark alive. ${base}`;
+  if (room && room.category === 'States')
+    return `You are Nova, a friendly local-guide AI in "${name}". Share fun facts and tips about the area. ${base}`;
+  return `You are Nova, a friendly, witty AI in the live video chat room "${name}". ${base}`;
+}
 async function askNova(u, question) {
   const roomId = u.roomId;
   const now = Date.now();
@@ -578,7 +594,7 @@ async function askNova(u, question) {
         model: AI_MODEL,
         max_tokens: 300,
         messages: [
-          { role: 'system', content: `You are Nova, a friendly, witty AI in a live video chat room called "${room ? room.name : 'CamWave'}". Keep answers short (under 80 words), fun, and conversational. You can be playful and flirty in adult rooms but never explicit. No disallowed content.` },
+          { role: 'system', content: novaPersona(room) },
           { role: 'user', content: `${u.name} asks: ${question.slice(0, 500)}` },
         ],
       }),
