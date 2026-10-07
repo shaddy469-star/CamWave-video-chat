@@ -23,8 +23,19 @@ const { WebSocketServer } = require('ws');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
-// bumped on every deploy so browsers always load the fresh app shell
-const APP_VERSION = process.env.RENDER_GIT_COMMIT ? process.env.RENDER_GIT_COMMIT.slice(0, 7) : String(Date.now());
+// Cache-bust the app shell with a hash of the actual served files.
+// RENDER_GIT_COMMIT is not reliably present at runtime on Render, so the
+// old version froze at "?v=0" and phones kept stale app.js/style.css for up
+// to a year (immutable headers) even after deploys. A content hash changes
+// exactly when the files change, so every pushed fix reaches phones fresh.
+const APP_VERSION = (() => {
+  try {
+    const h = crypto.createHash('md5');
+    h.update(fs.readFileSync(path.join(PUBLIC_DIR, 'app.js')));
+    h.update(fs.readFileSync(path.join(PUBLIC_DIR, 'style.css')));
+    return h.digest('hex').slice(0, 10);
+  } catch { return String(Date.now()); }
+})();
 
 /* ------------------------------------------------------------------ */
 /* In-memory state                                                     */
