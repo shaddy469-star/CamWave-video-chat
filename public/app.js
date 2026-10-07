@@ -62,6 +62,11 @@ function onServer(m) {
       toast(`🎉 Daily bonus: +🪙${m.coins}!`); break;
     case 'gift-event':
       giftCelebration(m); break;
+    case 'like-event':
+      spawnHearts(4, false);
+      railLikes++;
+      $('rail-like-count').textContent = railLikes > 999 ? (railLikes / 1000).toFixed(1) + 'K' : railLikes;
+      break;
     case 'site-banner':
       S.siteBanner = m.banner; break;
     case 'warned':
@@ -222,10 +227,13 @@ function renderRooms() {
     for (const r of groups[cat]) {
       const d = document.createElement('div');
       d.className = 'room-card';
-      d.innerHTML = `<h3>${esc(r.name)}</h3>
-        <div class="meta"><span>👥 ${r.userCount}</span>
-        <span class="pill ${r.userCount > 5 ? 'hot' : ''}">${r.openMic ? '🎙 open mic' : '🔊 push-to-talk'}</span>
-        ${r.djActive ? '<span class="pill hot">🎧 DJ live</span>' : ''}</div>`;
+      const emoji = r.userCount > 0 ? '🔴' : '💤';
+      d.innerHTML = `<div class="rc-thumb">${emoji}
+          ${r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : ''}
+          <span class="rc-views">👁 ${r.userCount}</span>
+        </div>
+        <div class="rc-name">${esc(r.name)}</div>
+        <div class="rc-meta">${r.openMic ? '🎙 open mic' : '🔊 push-to-talk'}${r.djActive ? ' · 🎧 DJ' : ''}</div>`;
       d.onclick = () => wsSend({ type: 'join-room', roomId: r.id });
       grid.appendChild(d);
     }
@@ -786,6 +794,61 @@ function openGiftShop(toId) {
 }
 $('gift-close').onclick = () => $('gift-modal').classList.add('hidden');
 $('gift-shop-btn').onclick = () => openGiftShop(null);
+
+/* ---- TikTok action rail: likes, gifts, share ---- */
+let railLikes = 0;
+function spawnHearts(n, big) {
+  const layer = $('heart-layer');
+  if (!layer) return;
+  const emojis = big ? ['❤️', '💖', '💕'] : ['❤️'];
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('span');
+    s.className = 'float-heart';
+    s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    s.style.left = (55 + Math.random() * 35) + '%';
+    s.style.animationDelay = (Math.random() * 0.4) + 's';
+    if (big) s.style.fontSize = (1.6 + Math.random() * 1.6) + 'em';
+    layer.appendChild(s);
+    setTimeout(() => s.remove(), 2200);
+  }
+}
+$('rail-like').onclick = (e) => {
+  const btn = e.currentTarget;
+  btn.classList.remove('liked'); void btn.offsetWidth; btn.classList.add('liked');
+  railLikes++;
+  $('rail-like-count').textContent = railLikes > 999 ? (railLikes / 1000).toFixed(1) + 'K' : railLikes;
+  spawnHearts(3, false);
+  wsSend({ type: 'like' });
+};
+$('rail-gift').onclick = () => openGiftShop(null);
+$('rail-share').onclick = async () => {
+  const url = location.origin + location.pathname;
+  try { await navigator.clipboard.writeText(url); toast('🔗 Room link copied!'); }
+  catch { toast('🔗 ' + url); }
+};
+// double-tap video grid = big like (TikTok-style)
+let lastTap = 0;
+$('video-grid').addEventListener('click', () => {
+  const now = Date.now();
+  if (now - lastTap < 350) { spawnHearts(8, true); wsSend({ type: 'like' }); }
+  lastTap = now;
+});
+
+/* ---- bottom nav ---- */
+$('nav-home').onclick = () => {
+  if (S.room) { wsSend({ type: 'leave-room' }); leaveRoomUI(); }
+  else { $('view-room').classList.add('hidden'); $('view-lobby').classList.remove('hidden'); }
+  setNav('nav-home');
+};
+$('nav-create').onclick = () => {
+  const name = prompt('Name your room:');
+  if (name && name.trim().length >= 2) wsSend({ type: 'create-room', name: name.trim().slice(0, 40) });
+  setNav('nav-home');
+};
+$('nav-profile').onclick = () => { $('contacts-drawer').classList.remove('hidden'); setNav('nav-profile'); };
+function setNav(id) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === id));
+}
 
 /* ---- coin shop (real-money top-ups) ---- */
 $('buy-coins-btn').onclick = async () => {

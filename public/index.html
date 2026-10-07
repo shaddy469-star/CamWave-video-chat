@@ -100,6 +100,13 @@
           <button id="spotlight-close">✕</button>
         </div>
         <div id="video-grid" class="video-grid"></div>
+        <!-- TikTok-style right action rail -->
+        <div id="action-rail">
+          <button class="rail-btn" id="rail-like" title="Like"><span class="rail-emoji">❤️</span><span class="rail-count" id="rail-like-count">0</span></button>
+          <button class="rail-btn" id="rail-gift" title="Send gift"><span class="rail-emoji">🎁</span><span class="rail-count">Gift</span></button>
+          <button class="rail-btn" id="rail-share" title="Share room"><span class="rail-emoji">📤</span><span class="rail-count">Share</span></button>
+        </div>
+        <div id="heart-layer"></div>
         <div class="media-controls">
           <button id="cam-toggle" class="ctl" title="Camera">🎥</button>
           <button id="screen-btn" class="ctl" title="Share screen">🖥️</button>
@@ -161,6 +168,13 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== BOTTOM NAV (TikTok style) ===== -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" id="nav-home" title="Rooms">🏠<span>Rooms</span></button>
+    <button class="nav-btn nav-create" id="nav-create" title="Create room">＋</button>
+    <button class="nav-btn" id="nav-profile" title="Contacts">👤<span>Friends</span></button>
+  </nav>
 
   <!-- ===== ROOM SETTINGS MODAL ===== -->
   <div id="settings-modal" class="modal hidden">

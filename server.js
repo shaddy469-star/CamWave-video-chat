@@ -1071,6 +1071,12 @@ function handleMessage(ws, raw) {
       break;
     }
 
+    case 'like': {
+      if (!u.roomId) break;
+      broadcastRoom(u.roomId, { type: 'like-event', from: u.id, fromName: u.name }, u.id);
+      break;
+    }
+
     case 'send-gift': {
       const gift = GIFTS.find(g => g.id === msg.giftId);
       const target = users.get(msg.to);
