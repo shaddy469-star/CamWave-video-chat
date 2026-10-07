@@ -78,6 +78,8 @@ function onServer(m) {
       S.triviaBoard = m.board; renderTriviaBoard(); break;
     case 'trivia-win':
       halloweenCelebration(m.winners || []); break;
+    case 'spooky-sound':
+      playSpookySound(m.sound); break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -436,6 +438,74 @@ function halloweenCelebration(winners) {
   const kill = () => { if (ov.parentNode) ov.remove(); };
   ov.onclick = kill;
   setTimeout(kill, 6000);
+}
+
+/* ---- ambient spooky sound effects ---- */
+function playSpookySound(kind) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    if (ctx.resume) ctx.resume();
+    const t = ctx.currentTime, out = ctx.destination;
+    function tone(o) {
+      const { type = 'sine', f0 = 440, f1 = null, t0 = 0, dur = 1, vol = 0.15, lfoF = null, lfoAmt = 0 } = o;
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f0, t + t0);
+      if (f1) osc.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + t0 + dur);
+      let lfo;
+      if (lfoF) {
+        lfo = ctx.createOscillator(); const lg = ctx.createGain();
+        lfo.frequency.value = lfoF; lg.gain.value = lfoAmt;
+        lfo.connect(lg); lg.connect(osc.frequency);
+      }
+      g.gain.setValueAtTime(0.0001, t + t0);
+      g.gain.exponentialRampToValueAtTime(vol, t + t0 + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + t0 + dur);
+      osc.connect(g); g.connect(out);
+      osc.start(t + t0); osc.stop(t + t0 + dur + 0.1);
+      if (lfo) { lfo.start(t + t0); lfo.stop(t + t0 + dur + 0.1); }
+    }
+    function noise(o) {
+      const { t0 = 0, dur = 1, vol = 0.2, fc = 800 } = o;
+      const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = fc;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + t0);
+      g.gain.exponentialRampToValueAtTime(vol, t + t0 + 0.12);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + t0 + dur);
+      src.connect(flt); flt.connect(g); g.connect(out);
+      src.start(t + t0);
+    }
+    switch (kind) {
+      case 'wail': // ghost wail
+        tone({ type: 'triangle', f0: 700, f1: 340, dur: 2.4, vol: 0.11, lfoF: 6, lfoAmt: 130 });
+        break;
+      case 'thunder': // distant thunder
+        noise({ dur: 2.6, vol: 0.28, fc: 200 });
+        noise({ t0: 0.2, dur: 1.6, vol: 0.18, fc: 110 });
+        break;
+      case 'creak': // creaking door
+        tone({ type: 'sawtooth', f0: 150, f1: 85, dur: 1.7, vol: 0.06, lfoF: 9, lfoAmt: 45 });
+        break;
+      case 'cackle': // witch cackle
+        [0, 0.17, 0.34, 0.55, 0.78].forEach((dt, i) =>
+          tone({ type: 'square', f0: 920 - i * 95, f1: 700 - i * 95, t0: dt, dur: 0.13, vol: 0.05 }));
+        break;
+      case 'howl': // wolf howl
+        tone({ type: 'triangle', f0: 300, f1: 620, dur: 0.9, vol: 0.11 });
+        tone({ type: 'triangle', f0: 620, f1: 440, t0: 0.9, dur: 1.6, vol: 0.11, lfoF: 5, lfoAmt: 35 });
+        break;
+      default:
+        tone({ type: 'triangle', f0: 700, f1: 340, dur: 2, vol: 0.1, lfoF: 6, lfoAmt: 120 });
+    }
+    setTimeout(() => { try { ctx.close(); } catch {} }, 4500);
+  } catch {}
 }
 
 /* crown the winner's video tile so everyone sees who got it */

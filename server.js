@@ -312,6 +312,11 @@ function ambientBotTick() {
       else if (pick < 0.75) hypeJoke(room.id).catch(() => {});
       else hypeFact(room.id).catch(() => {});
     }
+    // spooky sound effects every once in awhile
+    if (Math.random() < 1 / 8) {
+      const sounds = ['wail', 'thunder', 'creak', 'cackle', 'howl'];
+      broadcastRoom(room.id, { type: 'spooky-sound', sound: sounds[Math.floor(Math.random() * sounds.length)] });
+    }
   }
 }
 const ambientTimer = setInterval(ambientBotTick, 60000);
