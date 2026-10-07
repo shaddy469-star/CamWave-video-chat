@@ -576,7 +576,8 @@ function roomSummary(r) {
   for (const u of users.values()) if (u.roomId === r.id) count++;
   return { id: r.id, name: r.name, userCount: count,
            openMic: r.settings.openMic, djActive: r.dj.active,
-           category: r.category || 'Rooms', permanent: !!r.permanent };
+           category: r.category || 'Rooms', permanent: !!r.permanent,
+           private: !!r.private };
 }
 function roomUsers(roomId) {
   const out = [];
@@ -836,7 +837,13 @@ function startTalkTimer(u) {
 }
 
 function pushRoomList() {
-  broadcastAll({ type: 'room-list', rooms: [...rooms.values()].map(roomSummary) });
+  for (const u of users.values()) {
+    // private 1-on-1 rooms are invisible to everyone except the site owner
+    const list = [...rooms.values()]
+      .filter(r => !r.private || u.siteOwner)
+      .map(roomSummary);
+    send(u.ws, { type: 'room-list', rooms: list });
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1067,9 +1074,14 @@ function handleMessage(ws, raw) {
       break;
 
     case 'signal': {
-      // Relay WebRTC signaling only between members of the same room
+      // Relay WebRTC signaling between members of the same room,
+      // or between a spectator and the members of the room they watch.
       const peer = users.get(msg.to);
-      if (!peer || peer.roomId !== u.roomId || !u.roomId)
+      if (!peer) return send(ws, { type: 'error', message: 'Signal target not found.' });
+      const sameRoom = u.roomId && peer.roomId === u.roomId;
+      const spectatorLink = (u.spectating && peer.roomId === u.spectating) ||
+                            (peer.spectating && u.roomId === peer.spectating);
+      if (!sameRoom && !spectatorLink)
         return send(ws, { type: 'error', message: 'Signal target not in your room.' });
       send(peer.ws, { type: 'signal', from: u.id, data: msg.data });
       break;
@@ -1162,6 +1174,8 @@ function handleMessage(ws, raw) {
       if (!target) return send(ws, { type: 'error', message: 'User is offline.' });
       if (target.id === u.id) return;
       const room = makeRoom(`🔒 ${u.name} & ${target.name}`, u.id);
+      room.private = true;
+      room.allowed = new Set([u.id, target.id]);
       joinRoom(u, room.id);
       send(target.ws, { type: 'cam-invite', from: u.id, fromName: u.name, roomId: room.id, roomName: room.name });
       break;
@@ -1181,6 +1195,31 @@ function handleMessage(ws, raw) {
         for (const x of users.values()) if (x.roomId === room.id) n++;
         if (n <= 1) { rooms.delete(room.id); pushRoomList(); }
       }
+      break;
+    }
+
+    /* ---- owner spy mode: invisibly watch private 1-on-1 sessions ---- */
+    case 'spy-join': {
+      if (!u.siteOwner) return send(ws, { type: 'error', message: 'Only the site owner can do that.' });
+      const room = rooms.get(msg.roomId);
+      if (!room || !room.private) return send(ws, { type: 'error', message: 'Not a private room.' });
+      if (u.roomId) doLeaveRoom(u);
+      if (u.spectating) {
+        const old = u.spectating; u.spectating = null;
+        broadcastRoom(old, { type: 'spectator-left', id: u.id });
+      }
+      u.spectating = room.id;
+      const others = roomUsers(room.id);
+      send(ws, { type: 'spy-joined', room: { id: room.id, name: room.name }, users: others });
+      broadcastRoom(room.id, { type: 'spectator-joined', id: u.id, name: u.name });
+      break;
+    }
+    case 'spy-leave': {
+      if (!u.spectating) break;
+      const rid = u.spectating;
+      u.spectating = null;
+      broadcastRoom(rid, { type: 'spectator-left', id: u.id });
+      send(ws, { type: 'spy-left' });
       break;
     }
 
@@ -1453,6 +1492,9 @@ function joinRoom(u, roomId) {
   const room = rooms.get(roomId);
   if (!room) return send(u.ws, { type: 'error', message: 'Room not found.' });
   if (u.roomId === roomId) return;
+  // private 1-on-1 rooms: only the two participants (or site owner spying) may enter
+  if (room.private && !room.allowed.has(u.id) && !u.siteOwner)
+    return send(u.ws, { type: 'error', message: 'This is a private session.' });
 
   // Ban checks (per-room, this session)
   const banRec = room.bans.get(u.id);
@@ -1514,6 +1556,11 @@ wss.on('connection', (ws, req) => {
     const u = ws._user;
     if (!u) return;
     clearTalkTimer(u);
+    // spectator cleanup: tell the watched room the invisible viewer is gone
+    if (u.spectating) {
+      broadcastRoom(u.spectating, { type: 'spectator-left', id: u.id });
+      u.spectating = null;
+    }
     const roomId = u.roomId;
     if (roomId) {
       u.roomId = null; // avoid double-broadcast inside doLeaveRoom ordering
