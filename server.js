@@ -1503,9 +1503,8 @@ function handleMessage(ws, raw) {
       if (u.muted) return; // server-muted users stay muted
       const room = rooms.get(u.roomId);
       if (!room) return;
-      if (room.settings.micLocked && !u.siteOwner && rankOf(room, u.id) < 1) {
-        u.muted = true;
-        return send(u.ws, { type: 'force-mute', by: '🔒 Mic lock' });
+      if (room.settings.micLocked && !u.siteOwner && rankOf(room, u.id) < 1 && msg.mode !== 'ptt-ok') {
+        return send(u.ws, { type: 'error', message: '🔒 Hands-free is locked — hold the talk button instead.' });
       }
       if (!room.settings.openMic && msg.mode !== 'ptt-ok') {
         // PTT mode: mic only live while holding talk button; client handles,
@@ -1857,19 +1856,13 @@ function handleMessage(ws, raw) {
       if (typeof msg.openMic === 'boolean' && isAdmin) room.settings.openMic = msg.openMic;
       if (typeof msg.micLocked === 'boolean') {
         room.settings.micLocked = msg.micLocked;
-        // when locking: mute everyone except staff
+        // hands-free lock: members must use push-to-talk, staff keep hands-free
         if (msg.micLocked) {
-          for (const m of roomUsers(room.id)) {
-            if (!m.siteOwner && rankOf(room, m.id) < 1 && !m.muted) {
-              m.muted = true; m.talking = false; m.micLive = false; clearTalkTimer(m);
-              send(m.ws, { type: 'force-mute', by: '🔒 Mic lock' });
-              broadcastRoom(room.id, { type: 'user-muted', id: m.id, name: m.name }, m.id);
-            }
-          }
-          broadcastRoom(room.id, { type: 'notice', text: '🔒 Mic locked — only owner & moderators can talk.' });
+          broadcastRoom(room.id, { type: 'notice', text: '🔒 Hands-free locked — members must use push-to-talk. Owner & mods keep hands-free.' });
         } else {
-          broadcastRoom(room.id, { type: 'notice', text: '🔓 Mic unlocked.' });
+          broadcastRoom(room.id, { type: 'notice', text: '🔓 Hands-free unlocked.' });
         }
+        broadcastRoom(room.id, { type: 'room-settings-updated', settings: room.settings });
       }
       if (Number.isFinite(msg.talkLimitSec) && isAdmin)
         room.settings.talkLimitSec = Math.max(0, Math.min(600, Math.floor(msg.talkLimitSec)));
