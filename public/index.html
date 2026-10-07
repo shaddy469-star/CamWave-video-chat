@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CamWave — Live Video Chat Rooms</title>
+<meta name="description" content="CamWave: live video chat rooms. Real people, right now. Jump in, turn your cam on, meet the world. Free, no signup.">
+<!-- Open Graph / social preview -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="CamWave — Live Video Chat Rooms">
+<meta property="og:description" content="🎥 Live cams. Real people. Right now. Jump into a video chat room, turn your cam on, DJ the room, run the show. Free — no signup.">
+<meta property="og:image" content="/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<!-- Twitter card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CamWave — Live Video Chat Rooms">
+<meta name="twitter:description" content="🎥 Live cams. Real people. Right now. Jump in, turn your cam on, meet the world. Free — no signup.">
+<meta name="twitter:image" content="/og-image.png">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="toast-stack" class="toast-stack"></div>
+
+<!-- ============ LOGIN ============ -->
+<div id="login-screen" class="screen">
+  <div class="login-card">
+    <img src="/icon-192.png" alt="CamWave" class="login-logo">
+    <h1>Cam<span>Wave</span></h1>
+    <p class="tagline">Live cams. Real people. Right now.</p>
+    <input id="nick-input" maxlength="24" placeholder="Pick a nickname…" autocomplete="off">
+    <div class="login-row">
+      <select id="gender-input" title="Gender">
+        <option value="m">♂ Male</option>
+        <option value="f">♀ Female</option>
+      </select>
+      <input id="age-input" type="number" min="13" max="120" placeholder="Age">
+    </div>
+    <button id="join-btn" class="btn-primary">Enter the Wave 🌊</button>
+    <p id="login-error" class="error"></p>
+    <p class="fineprint">Free. No signup. Be kind — room owners can mute, kick or ban.</p>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="screen hidden">
+  <header id="topbar">
+    <div class="brand"><img src="/icon-192.png" alt=""><strong>Cam<span>Wave</span></strong></div>
+    <div class="me">
+      <span id="my-name"></span>
+      <select id="status-select" title="Your status">
+        <option value="online">🟢 Online</option>
+        <option value="away">🟡 Away</option>
+        <option value="busy">🔴 Busy</option>
+      </select>
+      <button id="contacts-btn" title="Contacts & messages">👥 <span id="dm-badge" class="badge hidden"></span></button>
+    </div>
+  </header>
+
+  <!-- ===== LOBBY ===== -->
+  <section id="view-lobby" class="view">
+    <div class="lobby-controls">
+      <input id="room-search" placeholder="🔍 Search rooms…">
+      <button id="create-room-btn" class="btn-primary">＋ Create room</button>
+    </div>
+    <div id="room-list" class="room-list"></div>
+  </section>
+
+  <!-- ===== ROOM ===== -->
+  <section id="view-room" class="view hidden">
+    <div class="room-topbar">
+      <button id="leave-room-btn" class="btn-ghost">← Leave</button>
+      <h2 id="room-name"></h2>
+      <span id="room-count" class="pill"></span>
+      <span id="room-mode" class="pill"></span>
+      <button id="room-settings-btn" class="btn-ghost hidden" title="Room settings">⚙️</button>
+    </div>
+
+    <div class="room-layout">
+      <div class="stage-col">
+        <div id="spotlight" class="spotlight hidden">
+          <video id="spotlight-video" autoplay playsinline></video>
+          <div id="spotlight-label" class="video-label"></div>
+          <button id="spotlight-close">✕</button>
+        </div>
+        <div id="video-grid" class="video-grid"></div>
+        <div class="media-controls">
+          <button id="cam-toggle" class="ctl" title="Camera">🎥</button>
+          <button id="mic-toggle" class="ctl" title="Microphone">🎙️</button>
+          <button id="ptt-btn" class="ctl ptt" title="Hold to talk">🔊 HOLD TO TALK</button>
+          <button id="dj-btn" class="ctl hidden" title="DJ mode">🎧 DJ</button>
+          <button id="sound-toggle" class="ctl" title="Join/leave sounds">🔔</button>
+        </div>
+      </div>
+
+      <div class="side-col">
+        <div class="panel">
+          <h3>👥 In this room <span id="side-count"></span></h3>
+          <div id="user-list" class="user-list"></div>
+        </div>
+        <div class="panel">
+          <h3>📋 Population log</h3>
+          <div id="activity-log" class="activity-log"></div>
+        </div>
+        <div class="panel chat-panel">
+          <h3>💬 Chat</h3>
+          <div id="chat-log" class="chat-log"></div>
+          <div class="chat-input-row">
+            <input id="chat-input" maxlength="500" placeholder="Say something… (😀 emoji work)">
+            <button id="chat-send" class="btn-primary">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CONTACTS DRAWER ===== -->
+  <div id="contacts-drawer" class="drawer hidden">
+    <div class="drawer-head">
+      <h3>👥 Contacts</h3>
+      <button id="contacts-close" class="btn-ghost">✕</button>
+    </div>
+    <div class="drawer-row">
+      <input id="add-contact-input" placeholder="Add by nickname…" maxlength="24">
+      <button id="add-contact-btn" class="btn-primary">Add</button>
+    </div>
+    <div id="contact-list" class="contact-list"></div>
+    <div id="dm-thread" class="hidden">
+      <div class="drawer-head"><h3 id="dm-title"></h3><button id="dm-close" class="btn-ghost">✕</button></div>
+      <div id="dm-log" class="chat-log"></div>
+      <div class="chat-input-row">
+        <input id="dm-input" maxlength="500" placeholder="Message…">
+        <button id="dm-send" class="btn-primary">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ROOM SETTINGS MODAL ===== -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>⚙️ Room settings</h3>
+      <label class="row"><input type="checkbox" id="set-openmic"> Open mic (free chat)</label>
+      <label class="row">Talk time limit (sec, 0 = none)
+        <input type="number" id="set-talklimit" min="0" max="600" value="0"></label>
+      <div class="modal-actions">
+        <button id="settings-save" class="btn-primary">Save</button>
+        <button id="settings-cancel" class="btn-ghost">Cancel</button>
+      </div>
+      <h4>🚫 Ban list</h4>
+      <div id="ban-list" class="ban-list"></div>
+    </div>
+  </div>
+
+  <!-- ===== DJ MODAL ===== -->
+  <div id="dj-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>🎧 DJ mode <span class="pill">you control the room's ears</span></h3>
+      <div class="row"><input type="file" id="dj-file" accept="audio/*"></div>
+      <div class="row"><input id="dj-url" placeholder="…or paste a direct audio stream URL (https://)"></div>
+      <div class="row">
+        <button id="dj-play-file" class="btn-primary">▶ Play file</button>
+        <button id="dj-play-url" class="btn-primary">▶ Play URL</button>
+        <button id="dj-stop" class="btn-danger">⏹ Cut it</button>
+      </div>
+      <div class="row">Volume <input type="range" id="dj-volume" min="0" max="100" value="80"></div>
+      <p class="fineprint">File mode streams your audio to everyone over WebRTC. URL mode has each listener play the stream directly.</p>
+      <div class="modal-actions"><button id="dj-close" class="btn-ghost">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ===== USER ACTION POPUP ===== -->
+  <div id="user-popup" class="popup hidden"></div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

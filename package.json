@@ -1,0 +1,1 @@
+{"dependencies":{"ws":"^8.18.0"},"description":"CamWave — live Camfrog-style video chat rooms. WebRTC mesh + WebSocket signaling. Deploy-ready for Render free tier.","engines":{"node":">=18"},"license":"MIT","main":"server.js","name":"camwave-video-chat","scripts":{"start":"node server.js"},"version":"1.0.0"}
