@@ -1444,13 +1444,11 @@ function setNav(id) {
 }
 
 /* ---- coin shop (real-money top-ups) ---- */
-$('buy-coins-btn').onclick = async () => {
+function openCoinShop() {
   $('coin-modal').classList.remove('hidden');
   const el = $('coin-packages');
   el.innerHTML = '<p class="fineprint">Loading…</p>';
-  try {
-    const r = await fetch('/api/coin-shop');
-    const j = await r.json();
+  fetch('/api/coin-shop').then(r => r.json()).then(j => {
     el.innerHTML = '';
     if (!j.stripeReady) {
       el.innerHTML = '<p class="fineprint">💳 Card purchases coming soon — for now earn free coins: +🪙100 welcome, +🪙50 daily, +🪙10 per trivia win.</p>';
@@ -1474,8 +1472,10 @@ $('buy-coins-btn').onclick = async () => {
       };
       el.appendChild(b);
     }
-  } catch { el.innerHTML = '<p class="fineprint">Could not load coin shop.</p>'; }
-};
+  }).catch(() => { el.innerHTML = '<p class="fineprint">Could not load coin shop.</p>'; });
+}
+$('buy-coins-btn').onclick = openCoinShop;
+$('coin-balance').onclick = openCoinShop;
 $('coin-close').onclick = () => $('coin-modal').classList.add('hidden');
 // after Stripe checkout, show a full coin-purchase celebration
 if (new URLSearchParams(location.search).get('coins') === 'success') {

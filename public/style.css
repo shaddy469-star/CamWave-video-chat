@@ -218,6 +218,8 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
   border-radius: 20px; padding: 3px 10px; font-weight: 700; font-size: 0.85em;
   color: #ffd54f; white-space: nowrap;
 }
+#coin-balance { cursor: pointer; }
+#coin-balance:active { transform: scale(.95); }
 .gift-shop { max-width: 440px; }
 .gift-label { display: block; margin: 8px 0; font-size: 0.9em; }
 .gift-label select {
