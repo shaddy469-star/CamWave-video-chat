@@ -156,7 +156,9 @@ async function fetchJson(url, opts = {}, timeoutMs = 8000) {
   } finally { clearTimeout(t); }
 }
 function botSay(roomId, name, text) {
-  broadcastRoom(roomId, { type: 'chat-msg', from: 'bot', name, role: 'member', text, ts: Date.now(), bot: true });
+  const payload = { type: 'chat-msg', from: 'bot', name, role: 'member', text, ts: Date.now(), bot: true };
+  addHistory(roomId, payload);
+  broadcastRoom(roomId, payload);
 }
 
 // ---- trivia ----
@@ -393,7 +395,8 @@ function roomSummary(r) {
   let count = 0;
   for (const u of users.values()) if (u.roomId === r.id) count++;
   return { id: r.id, name: r.name, userCount: count,
-           openMic: r.settings.openMic, djActive: r.dj.active };
+           openMic: r.settings.openMic, djActive: r.dj.active,
+           category: r.category || 'Rooms', permanent: !!r.permanent };
 }
 function roomUsers(roomId) {
   const out = [];
@@ -503,9 +506,9 @@ function doLeaveRoom(u, reason) {
         sendToUser(pick.id, { type: 'notice', text: 'You are now the room owner.' });
       }
     }
-    // Delete empty rooms (except keep none persistent — free tier resets anyway)
+    // Delete empty rooms (permanent directory rooms always stay)
     const still = roomUsers(roomId).length;
-    if (still === 0) {
+    if (still === 0 && !room.permanent) {
       rooms.delete(roomId);
       broadcastAll({ type: 'room-list', rooms: [...rooms.values()].map(roomSummary) });
     }
@@ -807,6 +810,7 @@ function handleMessage(ws, raw) {
       const room = rooms.get(u.roomId);
       const payload = { type: 'chat-msg', from: u.id, name: u.name,
         role: roleOf(room, u.id), text, ts: Date.now() };
+      addHistory(u.roomId, payload);
       broadcastRoom(u.roomId, payload);
       break;
     }
@@ -998,6 +1002,55 @@ function makeRoom(name, ownerId) {
   return room;
 }
 
+/* ================= permanent directory rooms ================= */
+const US_STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
+const DIRECTORY_DEFS = [
+  { id: 'dir-singles', name: '💕 Singles', category: 'Lifestyle' },
+  { id: 'dir-couples', name: '💑 Couples', category: 'Lifestyle' },
+  { id: 'dir-swingers', name: '🔥 Swingers', category: 'Lifestyle' },
+  { id: 'dir-dating', name: '💘 Dating', category: 'Lifestyle' },
+  { id: 'dir-18plus', name: '🔞 18+', category: 'Lifestyle' },
+  ...US_STATES.map(s => ({ id: 'dir-' + s.toLowerCase().replace(/[^a-z]/g, ''), name: '📍 ' + s, category: 'States' })),
+];
+function seedDirectoryRooms() {
+  for (const d of DIRECTORY_DEFS) {
+    if (rooms.has(d.id)) continue;
+    const room = { id: d.id, name: d.name, ownerId: null, admins: new Set(), mods: new Set(),
+      bans: new Map(), ipBans: new Set(), permanent: true, category: d.category,
+      settings: { openMic: false, talkLimitSec: 0 },
+      dj: { active: false, mode: null, url: null, volume: 1, by: null } };
+    rooms.set(d.id, room);
+    loadRoomHistory(d.id);
+  }
+}
+
+/* ================= room chat history ================= */
+const HISTORY_LIMIT = 100;
+const roomHistory = new Map(); // roomId -> [{from,name,role,text,ts,bot}]
+function addHistory(roomId, entry) {
+  let h = roomHistory.get(roomId);
+  if (!h) { h = []; roomHistory.set(roomId, h); }
+  h.push(entry);
+  if (h.length > HISTORY_LIMIT) h.splice(0, h.length - HISTORY_LIMIT);
+  const room = rooms.get(roomId);
+  if (room && room.permanent && persistOn) {
+    const key = 'camwave:history:' + roomId;
+    persistWrite((async () => {
+      await upstash('RPUSH', key, JSON.stringify(entry));
+      await upstash('LTRIM', key, -HISTORY_LIMIT, -1);
+    })());
+  }
+}
+async function loadRoomHistory(roomId) {
+  if (!persistOn) return;
+  try {
+    const raw = await upstash('LRANGE', 'camwave:history:' + roomId, 0, -1);
+    const arr = Array.isArray(raw) ? raw : [];
+    roomHistory.set(roomId, arr.map(s => { try { return JSON.parse(s); } catch { return null; } })
+      .filter(Boolean).slice(-HISTORY_LIMIT));
+  } catch (e) { console.warn('history load:', roomId, e.message); }
+}
+
 function joinRoom(u, roomId) {
   const room = rooms.get(roomId);
   if (!room) return send(u.ws, { type: 'error', message: 'Room not found.' });
@@ -1032,6 +1085,7 @@ function joinRoom(u, roomId) {
             myRole: roleOf(room, u.id), dj: room.dj },
     users: others,
     selfMuted: u.muted });
+  send(u.ws, { type: 'room-history', messages: roomHistory.get(roomId) || [] });
   broadcastRoom(roomId, { type: 'user-joined',
     user: { ...publicUser(u), role: roleOf(room, u.id) } }, u.id);
   pushRoomList();
@@ -1082,7 +1136,7 @@ wss.on('connection', (ws, req) => {
             sendToUser(pick.id, { type: 'notice', text: 'You are now the room owner.' });
           }
         }
-        if (roomUsers(roomId).length === 0) {
+        if (roomUsers(roomId).length === 0 && !room.permanent) {
           rooms.delete(roomId);
           pushRoomList();
         }
@@ -1110,4 +1164,5 @@ server.listen(PORT, () => {
   loadPersistedBans();
   loadSiteBanner();
   loadTriviaScores();
+  seedDirectoryRooms();
 });

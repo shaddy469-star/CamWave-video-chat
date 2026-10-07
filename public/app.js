@@ -89,6 +89,7 @@ function onServer(m) {
     case 'room-list':
       S.rooms = m.rooms; renderRooms(); break;
     case 'room-joined': onRoomJoined(m); break;
+    case 'room-history': renderHistory(m.messages || []); break;
     case 'left-room': break;
     case 'user-joined': onUserJoined(m.user); break;
     case 'user-left': onUserLeft(m.id, m.reason); break;
@@ -196,16 +197,56 @@ function renderRooms() {
   const rooms = S.rooms.filter(r => !q || r.name.toLowerCase().includes(q));
   if (!rooms.length) { list.innerHTML = '<p style="color:var(--muted)">No rooms yet — create one! 🎉</p>'; return; }
   list.innerHTML = '';
+  const order = ['Lifestyle', 'States', 'Rooms'];
+  const groups = {};
   for (const r of rooms) {
-    const d = document.createElement('div');
-    d.className = 'room-card';
-    d.innerHTML = `<h3>${esc(r.name)}</h3>
-      <div class="meta"><span>👥 ${r.userCount}</span>
-      <span class="pill ${r.userCount > 5 ? 'hot' : ''}">${r.openMic ? '🎙 open mic' : '🔊 push-to-talk'}</span>
-      ${r.djActive ? '<span class="pill hot">🎧 DJ live</span>' : ''}</div>`;
-    d.onclick = () => wsSend({ type: 'join-room', roomId: r.id });
-    list.appendChild(d);
+    const cat = r.category || 'Rooms';
+    (groups[cat] = groups[cat] || []).push(r);
   }
+  const cats = [...order.filter(c => groups[c]), ...Object.keys(groups).filter(c => !order.includes(c))];
+  for (const cat of cats) {
+    const h = document.createElement('div');
+    h.className = 'room-section';
+    h.innerHTML = `<h2>${esc(cat)} <span class="count">${groups[cat].length}</span></h2>`;
+    const grid = document.createElement('div');
+    grid.className = 'room-grid';
+    for (const r of groups[cat]) {
+      const d = document.createElement('div');
+      d.className = 'room-card';
+      d.innerHTML = `<h3>${esc(r.name)}</h3>
+        <div class="meta"><span>👥 ${r.userCount}</span>
+        <span class="pill ${r.userCount > 5 ? 'hot' : ''}">${r.openMic ? '🎙 open mic' : '🔊 push-to-talk'}</span>
+        ${r.djActive ? '<span class="pill hot">🎧 DJ live</span>' : ''}</div>`;
+      d.onclick = () => wsSend({ type: 'join-room', roomId: r.id });
+      grid.appendChild(d);
+    }
+    h.appendChild(grid);
+    list.appendChild(h);
+  }
+}
+
+/* ---- room chat history ---- */
+function renderHistory(msgs) {
+  const log = $('chat-log');
+  if (!log || !msgs.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'history-wrap';
+  const top = document.createElement('div');
+  top.className = 'history-divider';
+  top.textContent = '📜 Past conversations';
+  wrap.appendChild(top);
+  for (const m of msgs) {
+    const el = document.createElement('div');
+    el.className = 'chat-msg history' + (m.bot ? ' bot' : '');
+    el.innerHTML = `<span class="who">${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
+    wrap.appendChild(el);
+  }
+  const bot = document.createElement('div');
+  bot.className = 'history-divider';
+  bot.textContent = '— you joined · live —';
+  wrap.appendChild(bot);
+  log.prepend(wrap);
+  log.scrollTop = 0;
 }
 
 /* ============================== room ============================== */

@@ -207,6 +207,21 @@ body {
 .chat-msg.bot > div { white-space: pre-line; }
 .chat-msg.bot .who { color: var(--accent2); font-weight: 700; }
 
+/* room directory sections */
+.room-section { margin-bottom: 18px; }
+.room-section h2 { font-size: 1.05em; margin: 0 0 8px; color: var(--accent3); }
+.room-section h2 .count { font-size: 0.75em; color: var(--muted); font-weight: 400; }
+.room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+
+/* past conversation history */
+.history-divider {
+  text-align: center; color: var(--muted); font-size: 0.8em;
+  margin: 10px 0; padding: 6px;
+  border-top: 1px dashed rgba(255,255,255,.15);
+  border-bottom: 1px dashed rgba(255,255,255,.15);
+}
+.chat-msg.history { opacity: 0.75; }
+
 /* trivia champions board */
 .trivia-board { display: flex; flex-direction: column; gap: 4px; }
 .champ-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(0,0,0,.2); }
