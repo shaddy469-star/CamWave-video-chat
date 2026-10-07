@@ -1990,6 +1990,21 @@ function handleMessage(ws, raw) {
       break;
     }
     case 'dj': {
+      // DJ mode: mute everyone except staff so nobody talks over the music
+      if ((msg.action === 'start-url' || msg.action === 'start-file' || msg.action === 'start-tab') && u.siteOwner) {
+        for (const m of roomUsers(u.roomId)) {
+          if (m.id === u.id || m.siteOwner || rankOf(rooms.get(u.roomId), m.id) >= 1) continue;
+          if (!m.muted) {
+            m.muted = true; m.talking = false; m.micLive = false; clearTalkTimer(m);
+            send(m.ws, { type: 'force-mute', by: '🎧 DJ mode' });
+            broadcastRoom(u.roomId, { type: 'user-muted', id: m.id, name: m.name }, m.id);
+          }
+        }
+        broadcastRoom(u.roomId, { type: 'notice', text: '🎧 DJ mode — room muted, enjoy the music!' });
+      }
+      if (msg.action === 'stop' && u.siteOwner) {
+        broadcastRoom(u.roomId, { type: 'notice', text: '🎧 DJ stopped — mics are back!' });
+      }
       // { action:'start-file'|'start-url'|'stop'|'volume', url?, volume? }
       const room = rooms.get(u.roomId);
       if (!room || rankOf(room, u.id) < 1)

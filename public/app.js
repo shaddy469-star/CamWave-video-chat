@@ -2798,9 +2798,24 @@ function renderJukebox() {
 }
 $('jb-add-btn').onclick = () => {
   const name = $('jb-name').value.trim(), url = $('jb-url').value.trim();
-  if (!name || !/^https?:\/\//i.test(url)) return toast('Enter a name and valid MP3 URL.');
-  wsSend({ type: 'jukebox-add', genre: jbGenre, name, url, roomId: S.room.id });
-  $('jb-name').value = ''; $('jb-url').value = '';
+  const file = $('jb-file').files[0];
+  if (!name) return toast('Enter a track name.');
+  if (file) {
+    if (file.size > 15 * 1024 * 1024) return toast('File too big (15MB max).');
+    const rd = new FileReader();
+    rd.onload = () => {
+      wsSend({ type: 'jukebox-add', genre: jbGenre, name, url: rd.result, roomId: S.room.id });
+      $('jb-name').value = ''; $('jb-url').value = ''; $('jb-file').value = '';
+      toast('🎵 Track added!');
+    };
+    rd.readAsDataURL(file);
+  } else if (/^https?:\/\//i.test(url)) {
+    wsSend({ type: 'jukebox-add', genre: jbGenre, name, url, roomId: S.room.id });
+    $('jb-name').value = ''; $('jb-url').value = '';
+    toast('🎵 Track added!');
+  } else {
+    toast('Add an MP3 URL or pick a file.');
+  }
 };
 
 /* ============================== SOUNDBOARD ============================== */
