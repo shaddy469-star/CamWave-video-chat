@@ -1756,11 +1756,12 @@ $('cam-toggle').onclick = async () => {
 };
 
 $('mic-toggle').onclick = () => {
-  if (S.room && S.room.settings.openMic) {
-    // open-mic: toggle talk
+  const staff = S.siteOwner || (S.room && (S.room.myRole === 'owner' || S.room.myRole === 'admin' || S.room.myRole === 'moderator'));
+  if ((S.room && S.room.settings.openMic) || staff) {
+    // open-mic rooms: toggle for everyone; PTT rooms: toggle for staff
     setMicEnabled(!S.micOn);
   } else {
-    toast(S.room ? '🔊 Push-to-talk mode: hold the TALK button (or Space) to speak.' : '');
+    toast('🔊 Push-to-talk mode: hold the TALK button (or Space) to speak.');
   }
 };
 
@@ -1831,8 +1832,9 @@ function updateMediaButtons() {
   $('mic-toggle').classList.toggle('off', !S.micOn);
   $('mic-toggle').textContent = S.micOn ? '🎙️' : '🔇';
   const pttMode = !S.room || !S.room.settings.openMic;
+  const staff = S.siteOwner || (S.room && (S.room.myRole === 'owner' || S.room.myRole === 'admin' || S.room.myRole === 'moderator'));
   $('ptt-btn').style.display = pttMode ? '' : 'none';
-  $('mic-toggle').style.display = pttMode ? 'none' : '';
+  $('mic-toggle').style.display = (pttMode && !staff) ? 'none' : '';
 }
 
 /* push-to-talk: hold button or hold Space */
