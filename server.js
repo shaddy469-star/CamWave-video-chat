@@ -355,6 +355,12 @@ function greetJoiner(roomId, room, u) {
 }
 
 // ---- trivia ----
+const profiles = new Map(); // name -> { bio: '', photos: [] }
+function getProfile(name) {
+  let pr = profiles.get(name);
+  if (!pr) { pr = { bio: '', photos: [] }; profiles.set(name, pr); }
+  return pr;
+}
 const triviaState = new Map(); // roomId -> {active, q, answers:Map, scores:Map, timer}
 const FALLBACK_QS = [
   { question: 'What planet is known as the Red Planet?', options: ['Venus', 'Mars', 'Jupiter', 'Mercury'], correct: 1, category: 'Science' },
@@ -1757,6 +1763,37 @@ function handleMessage(ws, raw) {
         u.photo = dataUrl;
       }
       if (u.roomId) broadcastRoom(u.roomId, { type: 'user-photo', id: u.id, photo: u.photo });
+      break;
+    }
+
+    case 'set-bio': {
+      const bio = String(msg.bio || '').slice(0, 300);
+      getProfile(u.name).bio = bio;
+      send(u.ws, { type: 'profile-data', name: u.name, profile: getProfile(u.name) });
+      break;
+    }
+    case 'add-photo': {
+      const dataUrl = String(msg.dataUrl || '');
+      if (!/^data:image\/(jpeg|png|gif|webp)/i.test(dataUrl)) return;
+      if (dataUrl.length > 500 * 1024)
+        return send(u.ws, { type: 'error', message: 'Photo too big.' });
+      const pr = getProfile(u.name);
+      if (pr.photos.length >= 6)
+        return send(u.ws, { type: 'error', message: 'Max 6 photos.' });
+      pr.photos.push(dataUrl);
+      send(u.ws, { type: 'profile-data', name: u.name, profile: pr });
+      break;
+    }
+    case 'del-photo': {
+      const pr = getProfile(u.name);
+      const i = parseInt(msg.index, 10);
+      if (Number.isFinite(i) && i >= 0 && i < pr.photos.length) pr.photos.splice(i, 1);
+      send(u.ws, { type: 'profile-data', name: u.name, profile: pr });
+      break;
+    }
+    case 'get-profile': {
+      const nm = String(msg.name || '').slice(0, 40);
+      send(u.ws, { type: 'profile-data', name: nm, profile: getProfile(nm) });
       break;
     }
 

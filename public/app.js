@@ -128,6 +128,9 @@ function onServer(m) {
       showWarned(m); break;
     case 'mod-banner':
       showModBanner(m); break;
+    case 'profile-data':
+      if (m.name === profileName) { profileData = m.profile; renderProfile(); }
+      break;
     case 'user-photo': {
       const u = S.roomUsers.get(m.id);
       if (u) { u.photo = m.photo; renderVideoGrid(); renderUserList(); }
@@ -514,6 +517,7 @@ function showUserPopup(u, x, y) {
   const rank = canActOn(u);
   let html = `<div style="font-weight:700;margin-bottom:6px">${esc(u.name)}</div>`;
   html += `<button data-a="view">📹 View camera</button>`;
+  html += `<button data-a="profile">👤 View profile</button>`;
   html += `<button data-a="dm">💬 Message</button>`;
   html += `<button data-a="gift">🎁 Send gift</button>`;
   html += `<button data-a="battle">⚔️ Battle</button>`;
@@ -552,6 +556,7 @@ document.addEventListener('click', e => {
 
 function userAction(a, u) {
   if (a === 'view') { spotlight(u.id); return; }
+  if (a === 'profile') { openProfile(u.name, false); return; }
   if (a === 'dm') { openDm(u.id, u.name); return; }
   if (a === 'gift') { openGiftShop(u.id); return; }
   if (a === 'battle') { openBattlePicker(u); return; }
@@ -2457,3 +2462,83 @@ $('dj-volume').oninput = (e) => {
 
 /* ============================== boot ============================== */
 connect();
+
+/* ============================== profiles ============================== */
+let profileName = null, profileData = null;
+$('profile-close').onclick = () => $('profile-modal').classList.add('hidden');
+$('my-profile-btn').onclick = () => openProfile(S.myName, true);
+
+function openProfile(name, edit) {
+  profileName = name;
+  wsSend({ type: 'get-profile', name });
+  $('profile-body').innerHTML = '<p style="color:var(--muted)">Loading profile...</p>';
+  $('profile-modal').classList.remove('hidden');
+  $('profile-modal').dataset.edit = edit ? '1' : '';
+}
+
+function renderProfile() {
+  const body = $('profile-body');
+  const isMine = profileName === S.myName;
+  const edit = isMine || $('profile-modal').dataset.edit === '1';
+  const pr = profileData || { bio: '', photos: [] };
+  const u = [...S.roomUsers.values()].find(x => x.name === profileName);
+  const photo = (u && u.photo) || S.myPhoto;
+
+  let html = `<div style="text-align:center;margin-bottom:12px">`;
+  html += photo ? `<img src="${esc(photo)}" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`
+                : `<div style="width:96px;height:96px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:2.5em;margin:0 auto">👤</div>`;
+  html += `<h3 style="margin:8px 0 4px">${esc(profileName)}</h3></div>`;
+
+  // bio
+  if (edit && isMine) {
+    html += `<textarea id="profile-bio" rows="3" placeholder="Tell people about yourself..." style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;resize:vertical">${esc(pr.bio || '')}</textarea>`;
+    html += `<button id="profile-save-bio" class="btn-ghost" style="margin:8px 0">💾 Save bio</button>`;
+  } else if (pr.bio) {
+    html += `<p style="background:var(--bg2);border-radius:8px;padding:10px;margin:0 0 12px">${esc(pr.bio)}</p>`;
+  }
+
+  // photo gallery
+  html += `<h4 style="margin:12px 0 8px">📸 Photos (${pr.photos.length}/6)</h4>`;
+  html += `<div class="profile-gallery">`;
+  pr.photos.forEach((p, i) => {
+    html += `<div class="pg-photo"><img src="${esc(p)}" alt="">
+      ${edit && isMine ? `<button data-del="${i}" title="Delete">✕</button>` : ''}</div>`;
+  });
+  html += `</div>`;
+  if (edit && isMine && pr.photos.length < 6) {
+    html += `<label class="btn-ghost" style="display:inline-block;margin-top:8px;cursor:pointer">📤 Upload photo
+      <input type="file" id="profile-upload" accept="image/*" style="display:none"></label>`;
+  }
+  body.innerHTML = html;
+
+  if (edit && isMine) {
+    $('profile-save-bio').onclick = () => {
+      wsSend({ type: 'set-bio', bio: $('profile-bio').value });
+      toast('Bio saved ✓');
+    };
+    body.querySelectorAll('[data-del]').forEach(b => b.onclick = () => wsSend({ type: 'del-photo', index: b.dataset.del }));
+    const up = $('profile-upload');
+    if (up) up.onchange = () => {
+      const f = up.files[0];
+      if (!f) return;
+      compressPhoto(f, (dataUrl) => wsSend({ type: 'add-photo', dataUrl }));
+    };
+  }
+}
+
+/* compress image before upload */
+function compressPhoto(file, cb) {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const max = 800;
+    let { width: w, height: h } = img;
+    if (w > max || h > max) { const r = max / Math.max(w, h); w *= r; h *= r; }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    cb(c.toDataURL('image/jpeg', 0.75));
+  };
+  img.src = url;
+}

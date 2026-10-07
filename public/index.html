@@ -68,6 +68,7 @@
         <option value="away">🟡 Away</option>
         <option value="busy">🔴 Busy</option>
       </select>
+      <button id="my-profile-btn" class="btn-ghost" title="My profile">👤</button>
       <button id="contacts-btn" title="Contacts & messages">👥 <span id="dm-badge" class="badge hidden"></span></button>
     </div>
   </header>
@@ -239,6 +240,16 @@
       <h2>⚠️ You've been warned</h2>
       <p id="warned-text" class="lh-body"></p>
       <div class="modal-actions"><button id="warned-ok" class="btn-primary">Understood</button></div>
+    </div>
+  </div>
+
+  <!-- ===== PROFILE MODAL ===== -->
+  <div id="profile-modal" class="modal hidden">
+    <div class="modal-card">
+      <div id="profile-body"></div>
+      <div class="modal-actions">
+        <button id="profile-close" class="btn-ghost">Close</button>
+      </div>
     </div>
   </div>
 
