@@ -43,16 +43,25 @@ function onServer(m) {
     case 'welcome':
       S.myId = m.id; S.myName = m.name; S.myGender = m.gender; S.myAge = m.age;
       S.siteOwner = !!m.siteOwner;
+      S.coins = m.coins || 0; S.gifts = m.gifts || [];
       localStorage.setItem('camwave_nick', m.name);
       $('login-screen').classList.add('hidden');
       $('app').classList.remove('hidden');
       $('my-name').textContent = m.name;
       $('siteowner-btn').classList.toggle('hidden', !S.siteOwner);
+      updateCoinDisplay();
       if (m.siteBanner) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
       if (m.triviaBoard) { S.triviaBoard = m.triviaBoard; renderTriviaBoard(); }
       if (pendingPhoto) { S.myPhoto = pendingPhoto; wsSend({ type: 'set-photo', dataUrl: pendingPhoto }); pendingPhoto = null; }
       wsSend({ type: 'get-contacts' });
       break;
+    case 'coins':
+      S.coins = m.balance; updateCoinDisplay(); break;
+    case 'daily-bonus':
+      S.coins = m.balance; updateCoinDisplay();
+      toast(`🎉 Daily bonus: +🪙${m.coins}!`); break;
+    case 'gift-event':
+      giftCelebration(m); break;
     case 'site-banner':
       S.siteBanner = m.banner; break;
     case 'warned':
@@ -381,6 +390,7 @@ function showUserPopup(u, x, y) {
   let html = `<div style="font-weight:700;margin-bottom:6px">${esc(u.name)}</div>`;
   html += `<button data-a="view">📹 View camera</button>`;
   html += `<button data-a="dm">💬 Message</button>`;
+  html += `<button data-a="gift">🎁 Send gift</button>`;
   if (rank >= 1) {
     html += `<button data-a="warn">⚠️ Warn</button>`;
     html += `<button data-a="mute">${u.muted ? '🔊 Unmute' : '🔇 Mute'}</button>`;
@@ -412,6 +422,7 @@ document.addEventListener('click', e => {
 function userAction(a, u) {
   if (a === 'view') { spotlight(u.id); return; }
   if (a === 'dm') { openDm(u.id, u.name); return; }
+  if (a === 'gift') { openGiftShop(u.id); return; }
   if (a === 'warn') { openWarnModal(u); return; }
   const map = { mute: u.muted ? 'unmute' : 'mute', kick: 'kick', ban: 'ban', ipban: 'ipban',
                 'promote-mod': 'promote-mod', 'promote-admin': 'promote-admin', demote: 'demote' };
@@ -735,6 +746,74 @@ function playSpookySting() {
     o2.start(t); lfo.start(t); o2.stop(t + 1.2); lfo.stop(t + 1.2);
     setTimeout(() => { try { ctx.close(); } catch {} }, 2500);
   } catch {}
+}
+/* ---- gifts ---- */
+function updateCoinDisplay() {
+  const bal = S.coins || 0;
+  const a = $('coin-balance'); if (a) a.textContent = `🪙 ${bal}`;
+  const b = $('gift-coins'); if (b) b.textContent = `🪙 ${bal}`;
+}
+let giftToId = null;
+function openGiftShop(toId) {
+  giftToId = toId || null;
+  const sel = $('gift-to');
+  sel.innerHTML = '';
+  const users = [...S.roomUsers.values()].filter(u => u.id !== S.myId);
+  if (!users.length) { toast('No one else in the room to gift.'); return; }
+  for (const u of users) {
+    const o = document.createElement('option');
+    o.value = u.id; o.textContent = u.name;
+    if (u.id === giftToId) o.selected = true;
+    sel.appendChild(o);
+  }
+  giftToId = sel.value;
+  sel.onchange = () => { giftToId = sel.value; };
+  const grid = $('gift-grid');
+  grid.innerHTML = '';
+  for (const g of (S.gifts || [])) {
+    const b = document.createElement('button');
+    b.className = 'gift-item' + ((S.coins || 0) < g.cost ? ' poor' : '');
+    b.innerHTML = `<span class="ge">${g.emoji}</span><span class="gn">${esc(g.name)}</span><span class="gc">🪙${g.cost}</span>`;
+    b.onclick = () => {
+      if ((S.coins || 0) < g.cost) { toast(`Not enough coins for ${g.name} 🪙`); return; }
+      wsSend({ type: 'send-gift', to: giftToId, giftId: g.id });
+      $('gift-modal').classList.add('hidden');
+    };
+    grid.appendChild(b);
+  }
+  updateCoinDisplay();
+  $('gift-modal').classList.remove('hidden');
+}
+$('gift-close').onclick = () => $('gift-modal').classList.add('hidden');
+$('gift-shop-btn').onclick = () => openGiftShop(null);
+
+function giftCelebration(evt) {
+  const ov = document.createElement('div');
+  ov.id = 'gift-overlay';
+  const em = document.createElement('div');
+  em.className = 'gift-pop';
+  em.textContent = evt.gift.emoji;
+  const txt = document.createElement('div');
+  txt.className = 'gift-text';
+  txt.textContent = `${evt.fromName} sent ${evt.toName}`;
+  const nm = document.createElement('div');
+  nm.className = 'gift-name';
+  nm.textContent = `${evt.gift.emoji} ${evt.gift.name}!`;
+  ov.appendChild(em); ov.appendChild(txt); ov.appendChild(nm);
+  const bits = [evt.gift.emoji, '✨', '🎉', '💖'];
+  for (let i = 0; i < 22; i++) {
+    const s = document.createElement('span');
+    s.className = 'gift-fall';
+    s.textContent = bits[Math.floor(Math.random() * bits.length)];
+    s.style.left = (Math.random() * 100) + 'vw';
+    s.style.animationDelay = (Math.random() * 1.4) + 's';
+    s.style.fontSize = (1.2 + Math.random() * 1.8) + 'em';
+    ov.appendChild(s);
+  }
+  document.body.appendChild(ov);
+  const kill = () => { if (ov.parentNode) ov.remove(); };
+  ov.onclick = kill;
+  setTimeout(kill, 4200);
 }
 /* ---- private cam invites ---- */
 let pendingInvite = null;

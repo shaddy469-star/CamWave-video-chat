@@ -100,6 +100,71 @@ function persistBanner() {
   persistWrite(upstash('SET', 'camwave:sitebanner', JSON.stringify(siteBanner)));
 }
 
+/* ============================== gifts ==============================
+   TikTok-style gift economy: coins, gift shop, animated banners */
+const GIFTS = [
+  { id: 'rose',     emoji: '🌹', name: 'Rose',       cost: 1 },
+  { id: 'coffee',   emoji: '☕', name: 'Coffee',     cost: 5 },
+  { id: 'donut',    emoji: '🍩', name: 'Donut',      cost: 10 },
+  { id: 'icecream', emoji: '🍦', name: 'Ice Cream',  cost: 20 },
+  { id: 'teddy',    emoji: '🧸', name: 'Teddy Bear', cost: 30 },
+  { id: 'giftbox',  emoji: '🎁', name: 'Gift Box',   cost: 50 },
+  { id: 'crown',    emoji: '👑', name: 'Crown',      cost: 100 },
+  { id: 'diamond',  emoji: '💎', name: 'Diamond',    cost: 200 },
+  { id: 'rocket',   emoji: '🚀', name: 'Rocket',     cost: 500 },
+  { id: 'car',      emoji: '🏎️', name: 'Sports Car', cost: 1000 },
+  { id: 'jet',      emoji: '🛩️', name: 'Private Jet', cost: 5000 },
+];
+const STARTING_COINS = 100;
+const DAILY_COINS = 50;
+const TRIVIA_COINS = 10;
+const gCoins = new Map();
+const gDaily = new Map();
+
+async function loadCoins() {
+  if (!persistOn) return;
+  try {
+    const raw = await upstash('HGETALL', 'camwave:coins');
+    let entries = {};
+    if (Array.isArray(raw)) { for (let i = 0; i + 1 < raw.length; i += 2) entries[raw[i]] = raw[i + 1]; }
+    else if (raw && typeof raw === 'object') entries = raw;
+    for (const [k, v] of Object.entries(entries)) {
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) gCoins.set(k, n);
+    }
+    console.log(`coins: loaded ${gCoins.size} balances`);
+    const draw = await upstash('HGETALL', 'camwave:daily');
+    let dentries = {};
+    if (Array.isArray(draw)) { for (let i = 0; i + 1 < draw.length; i += 2) dentries[draw[i]] = draw[i + 1]; }
+    else if (draw && typeof draw === 'object') dentries = draw;
+    for (const [k, v] of Object.entries(dentries)) gDaily.set(k, String(v));
+  } catch (e) { console.warn('coins load:', e.message); }
+}
+function getCoins(name) { return gCoins.get(name.toLowerCase()) ?? 0; }
+function addCoins(name, delta) {
+  const k = name.toLowerCase();
+  const v = Math.max(0, (gCoins.get(k) ?? 0) + delta);
+  gCoins.set(k, v);
+  persistWrite(upstash('HSET', 'camwave:coins', k, v));
+  return v;
+}
+function ensureCoins(name) {
+  const k = name.toLowerCase();
+  if (!gCoins.has(k)) {
+    gCoins.set(k, STARTING_COINS);
+    persistWrite(upstash('HSET', 'camwave:coins', k, STARTING_COINS));
+  }
+  return gCoins.get(k);
+}
+function claimDaily(name) {
+  const k = name.toLowerCase();
+  const today = new Date().toISOString().slice(0, 10);
+  if (gDaily.get(k) === today) return 0;
+  gDaily.set(k, today);
+  persistWrite(upstash('HSET', 'camwave:daily', k, today));
+  return DAILY_COINS;
+}
+
 /* ============================== bots ==============================
    TriviaBot: interactive trivia (!trivia, !score, !top)
    HypeBot: fresh content (!trending, !joke, !fact, !bots) */
@@ -345,6 +410,9 @@ function recordTriviaWin(name) {
   g.score++; g.name = name;
   gTriviaScores.set(lname, g);
   persistWrite(upstash('HSET', 'camwave:triviascores', lname, JSON.stringify(g)));
+  const bal = addCoins(name, TRIVIA_COINS);
+  const usr = users.get(nameToId.get(lname));
+  if (usr) send(usr.ws, { type: 'coins', balance: bal });
   broadcastAll({ type: 'trivia-board', board: triviaBoard() });
 }
 
@@ -724,7 +792,13 @@ function handleMessage(ws, raw) {
       ws._user = user;
       users.set(id, user);
       nameToId.set(name.toLowerCase(), id);
-      send(ws, { type: 'welcome', id, name, gender, age, siteOwner: user.siteOwner, siteBanner, triviaBoard: triviaBoard() });
+      send(ws, { type: 'welcome', id, name, gender, age, siteOwner: user.siteOwner, siteBanner, triviaBoard: triviaBoard(),
+        coins: ensureCoins(name), gifts: GIFTS });
+      const daily = claimDaily(name);
+      if (daily > 0) {
+        const bal = addCoins(name, daily);
+        send(ws, { type: 'daily-bonus', coins: daily, balance: bal });
+      }
       // Seed a default room so the directory is never empty.
       // System-owned until someone joins, then the first joiner owns it.
       if (rooms.size === 0) makeRoom('Lobby', null);
@@ -876,6 +950,27 @@ function handleMessage(ws, raw) {
         for (const x of users.values()) if (x.roomId === room.id) n++;
         if (n <= 1) { rooms.delete(room.id); pushRoomList(); }
       }
+      break;
+    }
+
+    case 'send-gift': {
+      const gift = GIFTS.find(g => g.id === msg.giftId);
+      const target = users.get(msg.to);
+      if (!gift) return send(ws, { type: 'error', message: 'Unknown gift.' });
+      if (!u.roomId) return send(ws, { type: 'error', message: 'Join a room first.' });
+      if (!target || target.roomId !== u.roomId)
+        return send(ws, { type: 'error', message: 'Recipient must be in your room.' });
+      if (target.id === u.id) return send(ws, { type: 'error', message: 'You cannot send a gift to yourself.' });
+      const bal = getCoins(u.name);
+      if (bal < gift.cost)
+        return send(ws, { type: 'error', message: `Not enough coins — you have 🪙${bal}.` });
+      const newBal = addCoins(u.name, -gift.cost);
+      send(ws, { type: 'coins', balance: newBal });
+      const evt = { type: 'gift-event', from: u.id, fromName: u.name, to: target.id, toName: target.name,
+        gift: { id: gift.id, emoji: gift.emoji, name: gift.name, cost: gift.cost }, ts: Date.now() };
+      broadcastRoom(u.roomId, evt);
+      addHistory(u.roomId, { type: 'chat-msg', from: 'gift', name: '🎁 Gifts', role: 'member',
+        text: `${u.name} sent ${target.name} ${gift.emoji} ${gift.name}!`, ts: Date.now(), bot: true });
       break;
     }
 
@@ -1164,5 +1259,6 @@ server.listen(PORT, () => {
   loadPersistedBans();
   loadSiteBanner();
   loadTriviaScores();
+  loadCoins();
   seedDirectoryRooms();
 });

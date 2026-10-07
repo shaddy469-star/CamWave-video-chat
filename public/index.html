@@ -57,6 +57,7 @@
     <div class="brand"><img src="/icon-192.png" alt=""><strong>Cam<span>Wave</span></strong></div>
     <div class="me">
       <span id="my-name"></span>
+      <span id="coin-balance" class="coin-pill" title="Your coins">🪙 0</span>
       <button id="siteowner-btn" class="hidden" title="Edit welcome letterhead">👑</button>
       <button id="photo-btn" title="Set profile photo">📷</button>
       <input type="file" id="photo-input" accept="image/*" class="hidden">
@@ -86,6 +87,7 @@
       <span id="room-count" class="pill"></span>
       <span id="room-mode" class="pill"></span>
       <button id="room-settings-btn" class="btn-ghost hidden" title="Room settings">⚙️</button>
+      <button id="gift-shop-btn" class="btn-ghost" title="Send a gift">🎁</button>
     </div>
     <div id="mod-banner" class="hidden"></div>
 
@@ -258,6 +260,21 @@
         <button id="invite-accept" class="btn-primary">Accept</button>
         <button id="invite-decline" class="btn-danger">Decline</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== GIFT SHOP ===== -->
+  <div id="gift-modal" class="modal hidden">
+    <div class="modal-card gift-shop">
+      <h3>🎁 Send a gift <span id="gift-coins" class="coin-pill">🪙 0</span></h3>
+      <label class="gift-label">To:
+        <select id="gift-to"></select>
+      </label>
+      <div id="gift-grid" class="gift-grid"></div>
+      <div class="row">
+        <button id="gift-close" class="btn-ghost">Close</button>
+      </div>
+      <p class="fineprint">Win trivia for +🪙10 · +🪙50 daily bonus on login</p>
     </div>
   </div>
 </div>
