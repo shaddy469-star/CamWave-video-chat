@@ -332,10 +332,20 @@ async function fetchJson(url, opts = {}, timeoutMs = 8000) {
     return await r.json();
   } finally { clearTimeout(t); }
 }
-function botSay(roomId, name, text) {
+function botSay(roomId, name, text, opts) {
   const payload = { type: 'chat-msg', from: 'bot', name, role: 'member', text, ts: Date.now(), bot: true };
+  if (opts && opts.greeting) payload.greeting = true;
   addHistory(roomId, payload);
   broadcastRoom(roomId, payload);
+}
+const BOT_GREET = '👋 WelcomeBot';
+const ADULT_ROOM_IDS = new Set(['dir-18plus', 'dir-swingers']);
+function greetJoiner(roomId, room, u) {
+  const isAdult = ADULT_ROOM_IDS.has(room.id);
+  const text = isAdult
+    ? `🔞 ${u.name} just walked into ${room.name}!\nEveryone say hi! 👋 Where are you from, ${u.name}? 👀`
+    : `🎉 Welcome to ${room.name}, ${u.name}! 👋`;
+  botSay(roomId, BOT_GREET, text, { greeting: true });
 }
 
 // ---- trivia ----
@@ -1528,6 +1538,8 @@ function joinRoom(u, roomId) {
   send(u.ws, { type: 'room-history', messages: roomHistory.get(roomId) || [] });
   broadcastRoom(roomId, { type: 'user-joined',
     user: { ...publicUser(u), role: roleOf(room, u.id) } }, u.id);
+  // WelcomeBot greets every joiner — even if the room was empty
+  greetJoiner(roomId, room, u);
   pushRoomList();
 }
 

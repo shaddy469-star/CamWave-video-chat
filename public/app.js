@@ -283,7 +283,7 @@ function renderHistory(msgs) {
   wrap.appendChild(top);
   for (const m of msgs) {
     const el = document.createElement('div');
-    el.className = 'chat-msg history' + (m.bot ? ' bot' : '');
+    el.className = 'chat-msg history' + (m.bot ? ' bot' : '') + (m.greeting ? ' greeting' : '');
     el.innerHTML = `<span class="who">${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
     wrap.appendChild(el);
   }
@@ -1663,7 +1663,7 @@ function sendChat() {
 }
 function addChatMsg(m) {
   const el = document.createElement('div');
-  el.className = 'chat-msg' + (m.bot ? ' bot' : '');
+  el.className = 'chat-msg' + (m.bot ? ' bot' : '') + (m.greeting ? ' greeting' : '');
   el.innerHTML = `<span class="who ${m.role==='owner'?'owner':''}">${esc(m.name)}</span><span class="ts">${tsFmt(m.ts)}</span><div>${esc(m.text)}</div>`;
   $('chat-log').appendChild(el);
   $('chat-log').scrollTop = 1e6;

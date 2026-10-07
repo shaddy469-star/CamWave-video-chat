@@ -421,6 +421,19 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .lb-cols h4 { margin: 0 0 8px; font-size: .9em; }
 .lb-row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: .88em; }
 .lb-row small { color: var(--muted); }
+
+/* ---------- chat greeting (WelcomeBot) — impossible to miss ---------- */
+.chat-msg.greeting {
+  background: linear-gradient(135deg, rgba(254,44,85,.22), rgba(37,244,238,.12));
+  border: 2px solid var(--accent1); border-radius: 14px;
+  padding: 14px; margin: 10px 0; text-align: center;
+  animation: greeting-pop .5s cubic-bezier(.2,1.6,.4,1);
+  box-shadow: 0 0 24px rgba(254,44,85,.35);
+}
+.chat-msg.greeting .who { display: block; font-size: 1.05em; margin-bottom: 6px; }
+.chat-msg.greeting div { font-size: 1.12em; font-weight: 600; line-height: 1.5; white-space: pre-line; }
+@keyframes greeting-pop { 0% { transform: scale(.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
 .stage-col { position: relative; }
 #action-rail {
   position: absolute; right: 10px; bottom: 110px; z-index: 40;
