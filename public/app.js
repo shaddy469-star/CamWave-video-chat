@@ -951,14 +951,23 @@ function giftLegendary(evt) {
     if (AC) {
       const ctx = new AC(); if (ctx.resume) ctx.resume();
       const t = ctx.currentTime;
+      // bass thump on slam
+      const th = ctx.createOscillator(), tg = ctx.createGain();
+      th.type = 'sine'; th.frequency.setValueAtTime(120, t);
+      th.frequency.exponentialRampToValueAtTime(35, t + 0.25);
+      tg.gain.setValueAtTime(0.5, t);
+      tg.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      th.connect(tg); tg.connect(ctx.destination);
+      th.start(t); th.stop(t + 0.4);
+      // bright fanfare
       [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
         const o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'triangle'; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, t + i * 0.12);
-        g.gain.exponentialRampToValueAtTime(0.18, t + i * 0.12 + 0.05);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.5);
+        o.type = 'square'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + 0.1 + i * 0.1);
+        g.gain.exponentialRampToValueAtTime(0.08, t + 0.1 + i * 0.1 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1 + i * 0.1 + 0.4);
         o.connect(g); g.connect(ctx.destination);
-        o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.6);
+        o.start(t + 0.1 + i * 0.1); o.stop(t + 0.1 + i * 0.1 + 0.5);
       });
       setTimeout(() => { try { ctx.close(); } catch {} }, 2500);
     }
