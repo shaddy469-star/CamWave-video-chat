@@ -422,6 +422,15 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .lb-row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: .88em; }
 .lb-row small { color: var(--muted); }
 
+/* ---------- room visitor counter + visitor list ---------- */
+.rc-visits { font-size: .78em; color: var(--muted); margin-top: 4px; }
+.visitors-list { max-height: 50vh; overflow-y: auto; margin: 10px 0; }
+.visitor-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.vphoto { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.vphoto-none { display: flex; align-items: center; justify-content: center; background: var(--card); font-size: 1.2em; }
+.vinfo { flex: 1; }
+.vinfo small { color: var(--muted); }
+
 /* ---------- chat greeting (WelcomeBot) — impossible to miss ---------- */
 .chat-msg.greeting {
   background: linear-gradient(135deg, rgba(254,44,85,.22), rgba(37,244,238,.12));
@@ -501,7 +510,17 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .room-card .rc-thumb {
   aspect-ratio: 3/4; background: linear-gradient(160deg, #2a2a2a, #0a0a0a);
   display: flex; align-items: center; justify-content: center; font-size: 3em;
-  position: relative;
+  position: relative; overflow: hidden;
+}
+.room-card .rc-door {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+.room-card .rc-emoji { position: relative; z-index: 2; text-shadow: 0 2px 8px rgba(0,0,0,.8); }
+.room-card .rc-live, .room-card .rc-views { z-index: 2; }
+.room-card .rc-thumb::after {
+  content: ''; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(0,0,0,.15), transparent 40%, rgba(0,0,0,.55));
+  pointer-events: none;
 }
 .room-card .rc-live {
   position: absolute; top: 8px; left: 8px; background: var(--accent1); color: #fff;

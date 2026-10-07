@@ -339,7 +339,6 @@ function botSay(roomId, name, text, opts) {
   broadcastRoom(roomId, payload);
 }
 const BOT_GREET = '👋 WelcomeBot';
-const ADULT_ROOM_IDS = new Set(['dir-18plus', 'dir-swingers']);
 function greetJoiner(roomId, room, u) {
   const isAdult = ADULT_ROOM_IDS.has(room.id);
   const text = isAdult
@@ -587,7 +586,7 @@ function roomSummary(r) {
   return { id: r.id, name: r.name, userCount: count,
            openMic: r.settings.openMic, djActive: r.dj.active,
            category: r.category || 'Rooms', permanent: !!r.permanent,
-           private: !!r.private };
+           private: !!r.private, visits: roomVisitCounts.get(r.id) || 0 };
 }
 function roomUsers(roomId) {
   const out = [];
@@ -637,6 +636,31 @@ function giftLeaderboard() {
   return { type: 'gift-leaderboard', sent: top(giftSentStats), received: top(giftRecvStats) };
 }
 
+/* ---- room visit tracking: counters + visitor profiles ---- */
+const roomVisitCounts = new Map(); // roomId -> total joins (persisted)
+const roomVisitors = new Map();    // roomId -> [{id,name,photo,ts}] recent 50 (memory)
+function trackVisit(roomId, u) {
+  roomVisitCounts.set(roomId, (roomVisitCounts.get(roomId) || 0) + 1);
+  persistWrite(upstash('HSET', 'camwave:visitcounts', roomId, roomVisitCounts.get(roomId)));
+  let vl = roomVisitors.get(roomId);
+  if (!vl) { vl = []; roomVisitors.set(roomId, vl); }
+  const ex = vl.find(v => v.id === u.id);
+  if (ex) { ex.ts = Date.now(); ex.name = u.name; ex.photo = u.photo || null; }
+  else {
+    vl.unshift({ id: u.id, name: u.name, photo: u.photo || null, ts: Date.now() });
+    if (vl.length > 50) vl.pop();
+  }
+}
+async function loadVisitCounts() {
+  if (!persistOn) return;
+  try {
+    const raw = await upstash('HGETALL', 'camwave:visitcounts');
+    // upstash REST returns array [k1,v1,k2,v2...] or object
+    const pairs = Array.isArray(raw) ? raw : Object.entries(raw || {}).flat();
+    for (let i = 0; i + 1 < pairs.length; i += 2)
+      roomVisitCounts.set(pairs[i], parseInt(pairs[i + 1], 10) || 0);
+  } catch (e) { console.warn('visitcounts load:', e.message); }
+}
 /* ---- battles: 5-minute gift/tap/trivia showdowns ---- */
 const battles = new Map();            // roomId -> battle
 const pendingChallenges = new Map();  // targetId -> {challengerId, mode, roomId, timer}
@@ -1246,6 +1270,18 @@ function handleMessage(ws, raw) {
       break;
     }
 
+    case 'get-room-visitors': {
+      const room = rooms.get(msg.roomId || u.roomId);
+      if (!room) return send(ws, { type: 'error', message: 'Room not found.' });
+      // visitor details are staff-only; counts are public on room cards
+      const isStaff = u.siteOwner || rankOf(room, u.id) >= 1;
+      if (!isStaff) return send(ws, { type: 'error', message: 'Only room staff can see visitor details.' });
+      send(ws, { type: 'room-visitors', roomId: room.id, roomName: room.name,
+        total: roomVisitCounts.get(room.id) || 0,
+        visitors: roomVisitors.get(room.id) || [] });
+      break;
+    }
+
     case 'battle-challenge': {
       const target = users.get(msg.to);
       if (!target) return send(ws, { type: 'error', message: 'User not found.' });
@@ -1457,8 +1493,14 @@ const DIRECTORY_DEFS = [
   { id: 'dir-swingers', name: '🔥 Swingers', category: 'Lifestyle' },
   { id: 'dir-dating', name: '💘 Dating', category: 'Lifestyle' },
   { id: 'dir-18plus', name: '🔞 18+', category: 'Lifestyle' },
+  { id: 'dir-afterdark', name: '🌙 After Dark', category: 'Lifestyle' },
+  { id: 'dir-flirt', name: '💋 Flirt Zone', category: 'Lifestyle' },
+  { id: 'dir-adultlounge', name: '🥂 Adult Lounge', category: 'Lifestyle' },
+  { id: 'dir-masquerade', name: '🎭 Masquerade', category: 'Lifestyle' },
   ...US_STATES.map(s => ({ id: 'dir-' + s.toLowerCase().replace(/[^a-z]/g, ''), name: '📍 ' + s, category: 'States' })),
 ];
+// rooms that get the spicy WelcomeBot intro
+const ADULT_ROOM_IDS = new Set(['dir-18plus', 'dir-swingers', 'dir-afterdark', 'dir-flirt', 'dir-adultlounge', 'dir-masquerade']);
 function seedDirectoryRooms() {
   for (const d of DIRECTORY_DEFS) {
     if (rooms.has(d.id)) continue;
@@ -1538,6 +1580,8 @@ function joinRoom(u, roomId) {
   send(u.ws, { type: 'room-history', messages: roomHistory.get(roomId) || [] });
   broadcastRoom(roomId, { type: 'user-joined',
     user: { ...publicUser(u), role: roleOf(room, u.id) } }, u.id);
+  // track the visit (counter + visitor profile)
+  trackVisit(roomId, u);
   // WelcomeBot greets every joiner — even if the room was empty
   greetJoiner(roomId, room, u);
   pushRoomList();
@@ -1622,5 +1666,6 @@ server.listen(PORT, () => {
   loadSiteBanner();
   loadTriviaScores();
   loadCoins();
+  loadVisitCounts();
   seedDirectoryRooms();
 });

@@ -67,6 +67,9 @@ function onServer(m) {
     case 'gift-leaderboard':
       if (m.seed) seedTicker(m); else showGiftLeaderboard(m);
       break;
+    case 'room-visitors':
+      showRoomVisitors(m);
+      break;
     case 'spy-joined':
       onSpyJoined(m); break;
     case 'spy-left':
@@ -224,6 +227,22 @@ function doLogin() {
 }
 $('status-select').onchange = (e) => wsSend({ type: 'set-status', status: e.target.value });
 
+/* ---- door images: room cards get a mood image ---- */
+const ROOM_DOOR_IMGS = {
+  'dir-singles': 'img/rooms/singles.jpg',
+  'dir-couples': 'img/rooms/couples.jpg',
+  'dir-swingers': 'img/rooms/swingers.jpg',
+  'dir-dating': 'img/rooms/dating.jpg',
+  'dir-18plus': 'img/rooms/18plus.jpg',
+  'dir-afterdark': 'img/rooms/afterdark.jpg',
+  'dir-flirt': 'img/rooms/flirt.jpg',
+  'dir-adultlounge': 'img/rooms/adultlounge.jpg',
+  'dir-masquerade': 'img/rooms/masquerade.jpg',
+};
+function doorImg(r) {
+  return ROOM_DOOR_IMGS[r.id] || (r.category === 'States' ? 'img/rooms/states.jpg' : null);
+}
+
 /* ============================== lobby ============================== */
 $('room-search').addEventListener('input', e => { S.roomFilter = e.target.value.toLowerCase(); renderRooms(); });
 $('create-room-btn').onclick = () => {
@@ -254,12 +273,15 @@ function renderRooms() {
       const d = document.createElement('div');
       d.className = 'room-card' + (r.private ? ' private-card' : '');
       const emoji = r.private ? '🔒' : (r.userCount > 0 ? '🔴' : '💤');
-      d.innerHTML = `<div class="rc-thumb">${emoji}
+      const door = doorImg(r);
+      d.innerHTML = `<div class="rc-thumb">${door ? `<img src="${door}" class="rc-door" alt="" loading="lazy">` : ''}
+          <span class="rc-emoji">${emoji}</span>
           ${r.private ? '<span class="rc-live">PRIVATE</span>' : (r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : '')}
           <span class="rc-views">👁 ${r.userCount}</span>
         </div>
         <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
-        <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>`;
+        <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>
+        ${r.visits ? `<div class="rc-visits">📊 ${r.visits.toLocaleString()} visited</div>` : ''}`;
       d.onclick = () => {
         if (r.private && S.siteOwner) wsSend({ type: 'spy-join', roomId: r.id });
         else wsSend({ type: 'join-room', roomId: r.id });
@@ -856,6 +878,7 @@ function tickerAddGift(m) {
   tape.style.animation = 'none'; void tape.offsetWidth; tape.style.animation = '';
 }
 $('gift-lb-btn').onclick = () => openGiftLeaderboard();
+$('visitors-btn').onclick = () => openRoomVisitors();
 
 /* ---- owner spy mode: invisibly watch private 1-on-1s ---- */
 function onSpyJoined(m) {
@@ -1019,6 +1042,37 @@ function endBattleUI(m) {
   const kill = () => { if (ov.parentNode) ov.remove(); };
   ov.onclick = kill;
   setTimeout(kill, 6000);
+}
+
+/* ---- room visitors ---- */
+function openRoomVisitors() {
+  wsSend({ type: 'get-room-visitors' });
+}
+function showRoomVisitors(m) {
+  let md = $('visitors-modal');
+  if (!md) {
+    md = document.createElement('div');
+    md.id = 'visitors-modal';
+    md.className = 'modal';
+    md.innerHTML = `<div class="modal-card">
+      <h3>📊 Room Visitors</h3>
+      <p class="fineprint" id="visitors-total"></p>
+      <div id="visitors-list" class="visitors-list"></div>
+      <div class="modal-actions"><button id="visitors-close" class="btn-ghost">Close</button></div>
+    </div>`;
+    document.body.appendChild(md);
+    md.querySelector('#visitors-close').onclick = () => md.classList.add('hidden');
+  }
+  md.querySelector('#visitors-total').textContent =
+    `${m.total.toLocaleString()} total visits to ${m.roomName}`;
+  md.querySelector('#visitors-list').innerHTML = m.visitors.length ? m.visitors.map(v => `
+    <div class="visitor-row">
+      ${v.photo ? `<img src="${esc(v.photo)}" class="vphoto" alt="">` : '<div class="vphoto vphoto-none">👤</div>'}
+      <div class="vinfo"><strong>${esc(v.name)}</strong><br><small>${new Date(v.ts).toLocaleString()}</small></div>
+      <button class="btn-ghost vmsg" data-id="${esc(v.id)}" data-name="${esc(v.name)}">💬</button>
+    </div>`).join('') : '<p class="fineprint">No visitors yet.</p>';
+  md.querySelectorAll('.vmsg').forEach(b => b.onclick = () => openDm(b.dataset.id, b.dataset.name));
+  md.classList.remove('hidden');
 }
 
 /* ---- gift leaderboard ---- */
