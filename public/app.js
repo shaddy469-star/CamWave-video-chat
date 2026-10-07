@@ -310,7 +310,9 @@ function renderRooms() {
     h.innerHTML = `<h2>${esc(cat)} <span class="count">${groups[cat].length}</span></h2>`;
     const grid = document.createElement('div');
     grid.className = 'room-grid';
-    for (const r of groups[cat]) grid.appendChild(roomCard(r));
+    // Camfrog style: busiest rooms first
+    const sorted = [...groups[cat]].sort((a, b) => (b.userCount || 0) - (a.userCount || 0));
+    for (const r of sorted) grid.appendChild(roomCard(r));
     h.appendChild(grid);
     list.appendChild(h);
   }
@@ -320,15 +322,15 @@ function renderRooms() {
 function roomCard(r) {
   const d = document.createElement('div');
   d.className = 'room-row' + (r.private ? ' private-card' : '');
-  const emoji = r.private ? '🔒' : (r.userCount > 0 ? '🔴' : '💤');
-  const status = r.private ? 'PRIVATE' : (r.userCount > 0 ? `🔴 LIVE · 👁 ${r.userCount}` : '💤 idle');
+  const live = (r.userCount || 0) > 0;
+  const emoji = r.private ? '🔒' : (live ? '🔴' : '💤');
   const meta = r.private ? 'tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk');
   d.innerHTML = `<span class="rr-emoji">${emoji}</span>
     <span class="rr-main">
       <span class="rr-name">${esc(r.name)}</span>
-      <span class="rr-meta">${meta}${r.djActive ? ' · 🎧 DJ' : ''}${r.visits ? ` · 📊 ${r.visits.toLocaleString()}` : ''}</span>
+      <span class="rr-meta">${r.private ? 'PRIVATE' : meta}${r.djActive ? ' · 🎧 DJ' : ''}</span>
     </span>
-    <span class="rr-status">${status}</span>
+    <span class="rr-count">${r.private ? '' : `👥 ${r.userCount || 0}`}</span>
     <span class="rr-go">›</span>`;
   d.onclick = () => {
     const msg = (r.private && S.siteOwner) ? { type: 'spy-join', roomId: r.id } : { type: 'join-room', roomId: r.id };
