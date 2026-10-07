@@ -1587,7 +1587,8 @@ function handleMessage(ws, raw) {
 
     case 'mic-on': {
       if (u.restricted) return send(u.ws, { type: 'error', message: '\u26a0\ufe0f You are restricted — only the owner can unblock you.' });
-      if (u.siteOwner) u.muted = false; // owner self-heals
+      if (u.name === SITE_OWNER && !u.siteOwner) { u.siteOwner = true; console.log('owner flag self-healed for', u.name); }
+      if (u.siteOwner) { u.muted = false; send(u.ws, { type: 'force-unmute', by: 'system' }); }
       if (u.muted) return; // server-muted users stay muted
       const room = rooms.get(u.roomId);
       if (!room) return;
