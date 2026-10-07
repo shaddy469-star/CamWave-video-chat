@@ -289,6 +289,7 @@ const BOT_TRIVIA = '🎲 TriviaBot';
 const BOT_HYPE = '🔥 HypeBot';
 const BOT_RIZZ = '🤖 RizzBot';
 const BOT_TEASE = '💋 TeaseBot';
+const BOT_NOVA = '✨ Nova';
 const RIZZ_LINES = [
   'Smooth. Real smooth. 😎',
   'The rizz is strong with this one.',
@@ -548,6 +549,63 @@ setInterval(() => {
   }
 }, 9 * 60 * 1000);
 
+
+/* ---- Nova: AI Q&A bot (OpenAI-compatible API) ---- */
+const AI_API_URL = process.env.AI_API_URL || 'https://api.openai.com/v1/chat/completions';
+const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+const novaCooldown = new Map(); // userId -> timestamp
+async function askNova(u, question) {
+  const roomId = u.roomId;
+  const now = Date.now();
+  const last = novaCooldown.get(u.id) || 0;
+  if (now - last < 20000) {
+    botSay(roomId, BOT_NOVA, `⏳ Give me a sec, ${u.name} — one question at a time! (20s cooldown)`);
+    return;
+  }
+  novaCooldown.set(u.id, now);
+  const key = process.env.AI_API_KEY;
+  if (!key) {
+    botSay(roomId, BOT_NOVA, `🌙 I'm still waking up, ${u.name}! My brain isn't connected yet — the site owner needs to add an AI key. Try the other bots with !bots meanwhile! 🤖`);
+    return;
+  }
+  botSay(roomId, BOT_NOVA, `🤔 Thinking...`);
+  try {
+    const room = rooms.get(roomId);
+    const r = await fetch(AI_API_URL, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: 300,
+        messages: [
+          { role: 'system', content: `You are Nova, a friendly, witty AI in a live video chat room called "${room ? room.name : 'CamWave'}". Keep answers short (under 80 words), fun, and conversational. You can be playful and flirty in adult rooms but never explicit. No disallowed content.` },
+          { role: 'user', content: `${u.name} asks: ${question.slice(0, 500)}` },
+        ],
+      }),
+    });
+    const j = await r.json();
+    const answer = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    if (!r.ok || !answer) throw new Error((j.error && j.error.message) || 'AI error');
+    botSay(roomId, BOT_NOVA, `✨ ${answer.trim()}`);
+  } catch (e) {
+    console.warn('Nova AI failed:', e.message);
+    botSay(roomId, BOT_NOVA, `😅 My brain glitched, ${u.name} — try again in a bit!`);
+  }
+}
+function checkNovaTrigger(u, text) {
+  const t = text.trim();
+  const low = t.toLowerCase();
+  let q = null;
+  if (low.startsWith('@nova')) q = t.slice(5).trim().replace(/^[:,]/, '').trim();
+  else if (low.startsWith('nova,') || low.startsWith('nova:')) q = t.slice(5).trim();
+  else if (low.startsWith('!ask ')) q = t.slice(5).trim();
+  else if (low === '!ask') { botSay(u.roomId, BOT_NOVA, '✨ Ask me anything! Type "@Nova <your question>" or "!ask <your question>".'); return true; }
+  if (q === null) return false;
+  if (!q) { botSay(u.roomId, BOT_NOVA, `✨ Yes, ${u.name}? Ask me anything!`); return true; }
+  askNova(u, q);
+  return true;
+}
+
 function handleBotCommand(u, text) {
   const roomId = u.roomId;
   const cmd = text.slice(1).split(' ')[0].toLowerCase();
@@ -567,7 +625,7 @@ function handleBotCommand(u, text) {
     case 'joke': hypeJoke(roomId); return true;
     case 'fact': hypeFact(roomId); return true;
     case 'bots':
-      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz line + sound 😎\n!roast [name] — savage robot diss 🔥\n!laugh — robot laugh 🤖\\n!tease — flirty line 💋\n!spicyfact — adult fact 🔥\n!spicytip — intimacy tip 💡 (adult rooms)');
+      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz line + sound 😎\n!roast [name] — savage robot diss 🔥\n!laugh — robot laugh 🤖\\n!tease — flirty line 💋\n!spicyfact — adult fact 🔥\n!spicytip — intimacy tip 💡 (adult rooms)\\n@Nova / !ask — ask the AI anything ✨');
       return true;
     case 'rizz':
       rizzUp(roomId);
@@ -1408,6 +1466,7 @@ function handleMessage(ws, raw) {
       const text = String(msg.text || '').slice(0, 500).trim();
       if (!text) return;
       if (text.startsWith('!') && handleBotCommand(u, text)) break;
+      if (checkNovaTrigger(u, text)) break;
       if (handleTriviaAnswer(u.roomId, u, text)) break;
       if (handleBattleTriviaAnswer(u.roomId, u, text)) break;
       const room = rooms.get(u.roomId);
