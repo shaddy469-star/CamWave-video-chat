@@ -935,3 +935,13 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
   background: #ff9800; color: #000; font-size: .68em; font-weight: 800;
   border-radius: 6px; padding: 2px 6px; letter-spacing: .5px;
 }
+
+/* mic level meter */
+#mic-meter {
+  width: 80px; height: 10px; background: rgba(255,255,255,.1);
+  border-radius: 6px; overflow: hidden; align-self: center;
+}
+#mic-meter-fill {
+  height: 100%; width: 0%; background: var(--good);
+  border-radius: 6px; transition: width .08s;
+}

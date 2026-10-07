@@ -1891,11 +1891,49 @@ $('sound-toggle').onclick = () => {
   $('sound-toggle').classList.toggle('off', !S.soundOn);
 };
 
+/* mic level meter */
+let micAnalyser = null, micAudioCtx = null, micMeterRAF = null;
+function startMicMeter() {
+  stopMicMeter();
+  try {
+    const track = S.localStream && S.localStream.getAudioTracks()[0];
+    if (!track) return;
+    micAudioCtx = micAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (micAudioCtx.state === 'suspended') micAudioCtx.resume();
+    const src = micAudioCtx.createMediaStreamSource(new MediaStream([track]));
+    micAnalyser = micAudioCtx.createAnalyser();
+    micAnalyser.fftSize = 256;
+    src.connect(micAnalyser);
+    const data = new Uint8Array(micAnalyser.frequencyBinCount);
+    const meter = document.getElementById('mic-meter-fill');
+    const wrap = document.getElementById('mic-meter');
+    if (wrap) wrap.style.display = 'block';
+    const loop = () => {
+      micAnalyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const lvl = Math.min(100, (sum / data.length) * 1.2);
+      if (meter) {
+        meter.style.width = lvl + '%';
+        meter.style.background = lvl > 70 ? 'var(--bad)' : lvl > 30 ? 'var(--warn)' : 'var(--good)';
+      }
+      micMeterRAF = requestAnimationFrame(loop);
+    };
+    loop();
+  } catch {}
+}
+function stopMicMeter() {
+  if (micMeterRAF) cancelAnimationFrame(micMeterRAF);
+  micMeterRAF = null; micAnalyser = null;
+  const wrap = document.getElementById('mic-meter');
+  if (wrap) wrap.style.display = 'none';
+}
 function setMicEnabled(on, forced) {
   if (on && S.selfMuted && !forced) { toast('🔇 You are muted.'); return; }
   S.micOn = on;
   if (S.localStream) S.localStream.getAudioTracks().forEach(t => t.enabled = on);
   wsSend({ type: on ? 'mic-on' : 'mic-off' });
+  if (on) startMicMeter(); else stopMicMeter();
   updateMediaButtons(); renderUserList();
 }
 

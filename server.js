@@ -367,6 +367,8 @@ function greetJoiner(roomId, room, u) {
 
 // ---- trivia ----
 const profiles = new Map(); // name -> { bio: '', photos: [] }
+const kickLockouts = new Map(); // name(lower) -> timestamp (2hr rejoin block)
+const restrictedUsers = new Map(); // name(lower) -> { by, ts, reason }
 function getProfile(name) {
   let pr = profiles.get(name);
   if (!pr) { pr = { bio: '', photos: [] }; profiles.set(name, pr); }
@@ -1201,6 +1203,7 @@ function startTalkTimer(u) {
     send(u.ws, { type: 'talk-timer', limitSec: limit });
     u.talkTimer = setTimeout(() => {
       u.talkTimer = null;
+      if (u.siteOwner) return;
       u.muted = true;
       u.talking = false;
       send(u.ws, { type: 'talk-timeout', limitSec: limit });
@@ -1304,6 +1307,7 @@ function handleModAction(actor, msg) {
 
   switch (msg.action) {
     case 'mute':
+      if (target.siteOwner) return send(actor.ws, { type: 'error', message: 'You cannot mute the site owner. \ud83d\udc51' });
       target.muted = true; target.talking = false; clearTalkTimer(target);
       send(target.ws, { type: 'force-mute', by: actor.name });
       broadcastRoom(room.id, { type: 'user-muted', id: target.id, name: target.name, by: actor.name });
@@ -1343,6 +1347,19 @@ function handleModAction(actor, msg) {
       broadcastRoom(room.id, { type: 'notice', text: `🔇 ${actor.name} muted everyone (${n}).` });
       break;
     }
+    case 'unrestrict': {
+      const nm = String(msg.name || '').toLowerCase();
+      restrictedUsers.delete(nm);
+      if (persistOn) persistWrite(upstash('SREM', 'camwave:restricted-list', nm).then(() => upstash('DEL', 'camwave:restricted:' + nm)));
+      for (const m of roomUsers(room.id)) {
+        if (m.name.toLowerCase() === nm) {
+          m.restricted = false;
+          broadcastRoom(room.id, { type: 'user-unrestricted', id: m.id, name: m.name });
+        }
+      }
+      broadcastRoom(room.id, { type: 'notice', text: `\u2705 ${actor.name} lifted restrictions on ${msg.name}.` });
+      break;
+    }
     case 'unmute-all': {
       for (const m of roomUsers(room.id)) {
         if (m.id === actor.id || m.siteOwner) continue;
@@ -1356,6 +1373,12 @@ function handleModAction(actor, msg) {
       break;
     }
     case 'kick': {
+      kickLockouts.set(target.name.toLowerCase(), Date.now() + 2 * 60 * 60 * 1000);
+      restrictedUsers.set(target.name.toLowerCase(), { by: actor.name, ts: Date.now(), reason: msg.reason || 'kicked' });
+      if (persistOn) persistWrite((async () => {
+        await upstash('SET', 'camwave:restricted:' + target.name.toLowerCase(), JSON.stringify(restrictedUsers.get(target.name.toLowerCase())));
+        await upstash('SADD', 'camwave:restricted-list', target.name.toLowerCase());
+      })());
       send(target.ws, { type: 'kicked', by: actor.name, reason: msg.reason || '' });
       broadcastRoom(room.id, { type: 'notice', text: `${target.name} was kicked by ${actor.name}.` }, target.id);
       broadcastRoom(room.id, { type: 'mod-banner', icon: '👢', text: `${target.name} was kicked by ${actor.name}` }, target.id);
@@ -1529,6 +1552,8 @@ function handleMessage(ws, raw) {
     }
 
     case 'mic-on': {
+      if (u.restricted) return send(u.ws, { type: 'error', message: '\u26a0\ufe0f You are restricted — only the owner can unblock you.' });
+      if (u.siteOwner) u.muted = false; // owner self-heals
       if (u.muted) return; // server-muted users stay muted
       const room = rooms.get(u.roomId);
       if (!room) return;
@@ -1556,6 +1581,7 @@ function handleMessage(ws, raw) {
 
     case 'chat': {
       if (!u.roomId) return;
+      if (u.restricted) return send(u.ws, { type: 'error', message: '\u26a0\ufe0f You are restricted — only the owner can unblock you.' });
       const text = String(msg.text || '').slice(0, 500).trim();
       if (!text) return;
       if (text.startsWith('!') && handleBotCommand(u, text)) break;
@@ -2011,6 +2037,13 @@ function joinRoom(u, roomId) {
   if (room.private && !room.allowed.has(u.id) && !u.siteOwner)
     return send(u.ws, { type: 'error', message: 'This is a private session.' });
 
+  // 2-hour kick lockout
+  const lockout = kickLockouts.get(u.name.toLowerCase());
+  if (lockout && Date.now() < lockout) {
+    const mins = Math.ceil((lockout - Date.now()) / 60000);
+    return send(u.ws, { type: 'kick-lockout', mins, room: room.name });
+  }
+  if (lockout) kickLockouts.delete(u.name.toLowerCase());
   // Ban checks (per-room, this session)
   const banRec = room.bans.get(u.id);
   if (banRec) return send(u.ws, { type: 'ban-reject', scope: 'room', room: room.name });
@@ -2029,7 +2062,8 @@ function joinRoom(u, roomId) {
     room.ownerId = u.id;
     send(u.ws, { type: 'notice', text: `You are now the owner of "${room.name}".` });
   }
-  u.muted = !room.settings.openMic && !u.siteOwner; // PTT rooms start muted — except the site owner
+  u.muted = u.siteOwner ? false : !room.settings.openMic; // owner NEVER muted
+  u.restricted = restrictedUsers.has(u.name.toLowerCase());
   u.videoOn = false;
   u.talking = false;
   u.micLive = false;
