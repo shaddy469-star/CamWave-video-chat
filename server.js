@@ -361,6 +361,27 @@ function getProfile(name) {
   if (!pr) { pr = { bio: '', photos: [] }; profiles.set(name, pr); }
   return pr;
 }
+function persistProfile(name) {
+  if (!persistOn) return;
+  const pr = profiles.get(name);
+  if (!pr) return;
+  const key = 'camwave:profile:' + name.toLowerCase();
+  persistWrite((async () => {
+    await upstash('SET', key, JSON.stringify(pr));
+    await upstash('SADD', 'camwave:profiles', name.toLowerCase());
+  })());
+}
+async function loadPersistedProfiles() {
+  if (!persistOn) { console.log('profile persistence: not configured (memory only)'); return; }
+  try {
+    const names = await upstash('SMEMBERS', 'camwave:profiles');
+    for (const n of (names || [])) {
+      const j = await upstash('GET', 'camwave:profile:' + n);
+      if (j) { try { profiles.set(n, JSON.parse(j)); } catch {} }
+    }
+    console.log('profile persistence: loaded', profiles.size, 'profiles');
+  } catch (e) { console.warn('profile load:', e.message); }
+}
 const triviaState = new Map(); // roomId -> {active, q, answers:Map, scores:Map, timer}
 const FALLBACK_QS = [
   { question: 'What planet is known as the Red Planet?', options: ['Venus', 'Mars', 'Jupiter', 'Mercury'], correct: 1, category: 'Science' },
@@ -1769,6 +1790,7 @@ function handleMessage(ws, raw) {
     case 'set-bio': {
       const bio = String(msg.bio || '').slice(0, 300);
       getProfile(u.name).bio = bio;
+      persistProfile(u.name);
       send(u.ws, { type: 'profile-data', name: u.name, profile: getProfile(u.name) });
       break;
     }
@@ -1781,6 +1803,7 @@ function handleMessage(ws, raw) {
       if (pr.photos.length >= 6)
         return send(u.ws, { type: 'error', message: 'Max 6 photos.' });
       pr.photos.push(dataUrl);
+      persistProfile(u.name);
       send(u.ws, { type: 'profile-data', name: u.name, profile: pr });
       break;
     }
@@ -1788,6 +1811,7 @@ function handleMessage(ws, raw) {
       const pr = getProfile(u.name);
       const i = parseInt(msg.index, 10);
       if (Number.isFinite(i) && i >= 0 && i < pr.photos.length) pr.photos.splice(i, 1);
+      persistProfile(u.name);
       send(u.ws, { type: 'profile-data', name: u.name, profile: pr });
       break;
     }
@@ -2045,6 +2069,7 @@ setInterval(() => {
 server.listen(PORT, () => {
   console.log(`CamWave listening on port ${PORT}`);
   loadPersistedBans();
+loadPersistedProfiles();
   loadSiteBanner();
   loadTriviaScores();
   loadCoins();

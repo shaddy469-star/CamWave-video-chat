@@ -61,6 +61,7 @@ function onServer(m) {
       if (m.topSpenders) renderTopSpenders(m.topSpenders);
       if (pendingPhoto) { S.myPhoto = pendingPhoto; wsSend({ type: 'set-photo', dataUrl: pendingPhoto }); pendingPhoto = null; }
       wsSend({ type: 'get-contacts' });
+  wsSend({ type: 'get-profile', name: m.name });
       S._welcomed = true;
       // complete any room tap that happened while disconnected
       if (S.pendingJoin) { const pj = S.pendingJoin; S.pendingJoin = null; wsSend(pj); }
@@ -130,6 +131,11 @@ function onServer(m) {
       showModBanner(m); break;
     case 'profile-data':
       if (m.name === profileName) { profileData = m.profile; renderProfile(); }
+      if (m.name === S.myName) {
+        try { localStorage.setItem('camwave_profile', JSON.stringify(m.profile)); } catch {}
+        // if server lost our profile (restart) but we have a backup, restore it
+        maybeRestoreProfile(m.profile);
+      }
       break;
     case 'user-photo': {
       const u = S.roomUsers.get(m.id);
@@ -2541,4 +2547,19 @@ function compressPhoto(file, cb) {
     cb(c.toDataURL('image/jpeg', 0.75));
   };
   img.src = url;
+}
+
+/* restore own profile from local backup if server lost it */
+let _restored = false;
+function maybeRestoreProfile(serverPr) {
+  if (_restored) return;
+  const empty = !serverPr || (!serverPr.bio && !(serverPr.photos || []).length);
+  if (!empty) return;
+  let backup = null;
+  try { backup = JSON.parse(localStorage.getItem('camwave_profile') || 'null'); } catch {}
+  if (!backup || (!backup.bio && !(backup.photos || []).length)) return;
+  _restored = true;
+  if (backup.bio) wsSend({ type: 'set-bio', bio: backup.bio });
+  for (const p of (backup.photos || []).slice(0, 6)) wsSend({ type: 'add-photo', dataUrl: p });
+  toast('📸 Restored your profile photos ✓');
 }
