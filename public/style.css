@@ -818,8 +818,9 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 
   /* lobby: 2-column cards, TikTok style */
   .lobby-controls { flex-wrap: wrap; }
-  .room-list { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .room-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .room-list, .room-grid { display: flex; flex-direction: column; gap: 8px; }
+  .room-row { padding: 12px 14px; min-height: 60px; }
+  .rr-name { font-size: 1.05em; }
   .room-section h2 { font-size: .95em; }
 
   /* room header */
@@ -874,3 +875,25 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
   .nav-btn { padding: 4px 10px; font-size: 1.3em; }
   .nav-create { padding: 6px 14px !important; }
 }
+
+/* ---------- room list rows (replaces cards) ---------- */
+.room-grid, .room-list {
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+}
+.room-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 14px 16px;
+  cursor: pointer; transition: border-color .12s, background .12s;
+  min-height: 64px;
+}
+.room-row:hover, .room-row:active { border-color: var(--accent1); background: var(--bg2); }
+.room-row.private-card { border-color: rgba(255,255,255,.25); }
+.rr-emoji { font-size: 1.6em; flex-shrink: 0; }
+.rr-main { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rr-name { font-weight: 800; font-size: 1.1em; color: #fff; overflow-wrap: anywhere; }
+.rr-meta { font-size: .82em; color: var(--muted); }
+.rr-status { font-size: .82em; font-weight: 700; color: var(--accent1); white-space: nowrap; flex-shrink: 0; }
+.rr-go { font-size: 1.6em; color: var(--muted); flex-shrink: 0; }

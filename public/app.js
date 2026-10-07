@@ -319,17 +319,17 @@ function renderRooms() {
 /* single room card (also used by the spy section) */
 function roomCard(r) {
   const d = document.createElement('div');
-  d.className = 'room-card' + (r.private ? ' private-card' : '');
+  d.className = 'room-row' + (r.private ? ' private-card' : '');
   const emoji = r.private ? '🔒' : (r.userCount > 0 ? '🔴' : '💤');
-  const door = doorImg(r);
-  d.innerHTML = `<div class="rc-thumb">${door ? `<img src="${door}" class="rc-door" alt="" loading="lazy">` : ''}
-      <span class="rc-emoji">${emoji}</span>
-      ${r.private ? '<span class="rc-live">PRIVATE</span>' : (r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : '')}
-      <span class="rc-views">👁 ${r.userCount}</span>
-    </div>
-    <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
-    <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>
-    ${r.visits ? `<div class="rc-visits">📊 ${r.visits.toLocaleString()} visited</div>` : ''}`;
+  const status = r.private ? 'PRIVATE' : (r.userCount > 0 ? `🔴 LIVE · 👁 ${r.userCount}` : '💤 idle');
+  const meta = r.private ? 'tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk');
+  d.innerHTML = `<span class="rr-emoji">${emoji}</span>
+    <span class="rr-main">
+      <span class="rr-name">${esc(r.name)}</span>
+      <span class="rr-meta">${meta}${r.djActive ? ' · 🎧 DJ' : ''}${r.visits ? ` · 📊 ${r.visits.toLocaleString()}` : ''}</span>
+    </span>
+    <span class="rr-status">${status}</span>
+    <span class="rr-go">›</span>`;
   d.onclick = () => {
     const msg = (r.private && S.siteOwner) ? { type: 'spy-join', roomId: r.id } : { type: 'join-room', roomId: r.id };
     if (S.ws && S.ws.readyState === 1) wsSend(msg);
