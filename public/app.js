@@ -574,6 +574,26 @@ function playRizzSound(kind) {
       case 'laser': // robot zap
         tone('sawtooth', 2200, 120, 0, 0.32, 0.12);
         break;
+      case 'rizzlaugh': { // 🤖 robot laugh ha-ha-ha
+        for (let i = 0; i < 5; i++) {
+          const t0 = i * 0.17;
+          const f = 400 - i * 30;
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          const lfo = ctx.createOscillator(), lg = ctx.createGain();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(f, t + t0);
+          o.frequency.exponentialRampToValueAtTime(Math.max(60, f * 0.7), t + t0 + 0.14);
+          lfo.type = 'square'; lfo.frequency.value = 32;
+          lg.gain.value = 0.08;
+          lfo.connect(lg); lg.connect(g.gain);
+          g.gain.setValueAtTime(0.08, t + t0);
+          g.gain.setValueAtTime(0.0001, t + t0 + 0.15);
+          o.connect(g); g.connect(out);
+          o.start(t + t0); lfo.start(t + t0);
+          o.stop(t + t0 + 0.16); lfo.stop(t + t0 + 0.16);
+        }
+        break;
+      }
       default:
         [466, 471, 461].forEach(f => tone('sawtooth', f, f, 0, 1.0, 0.1));
     }

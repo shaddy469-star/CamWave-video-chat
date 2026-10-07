@@ -131,7 +131,7 @@ const ROAST_LINES = [
   'Scanning... scanning... yep, still no rizz.',
   'You bring "it\'s the thought that counts" energy.',
 ];
-const ROAST_SOUNDS = ['womp', 'buzz', 'laser'];
+const ROAST_SOUNDS = ['womp', 'buzz', 'laser', 'rizzlaugh'];
 function rizzUp(roomId) {
   const line = RIZZ_LINES[Math.floor(Math.random() * RIZZ_LINES.length)];
   const sound = RIZZ_SOUNDS[Math.floor(Math.random() * RIZZ_SOUNDS.length)];
@@ -293,7 +293,7 @@ function handleBotCommand(u, text) {
     case 'joke': hypeJoke(roomId); return true;
     case 'fact': hypeFact(roomId); return true;
     case 'bots':
-      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz line + sound 😎\n!roast [name] — savage robot diss 🔥');
+      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact\n!rizz — rizz line + sound 😎\n!roast [name] — savage robot diss 🔥\n!laugh — robot laugh 🤖');
       return true;
     case 'rizz':
       rizzUp(roomId);
@@ -303,6 +303,10 @@ function handleBotCommand(u, text) {
       roastUp(roomId, target);
       return true;
     }
+    case 'laugh':
+      botSay(roomId, BOT_RIZZ, '🤖 HA-HA-HA-HA-HA');
+      broadcastRoom(roomId, { type: 'rizz-sound', sound: 'rizzlaugh' });
+      return true;
     case 'top': {
       const top = triviaBoard();
       botSay(roomId, BOT_TRIVIA, top.length
