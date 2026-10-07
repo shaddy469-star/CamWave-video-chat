@@ -2326,6 +2326,7 @@ function updateDmBadge() {
 $('room-settings-btn').onclick = () => {
   if (!S.room) return;
   $('set-openmic').checked = S.room.settings.openMic;
+  $('set-miclock').checked = !!S.room.settings.micLocked;
   $('set-talklimit').value = S.room.settings.talkLimitSec || 0;
   $('settings-modal').classList.remove('hidden');
   wsSend({ type: 'get-ban-list' });
@@ -2334,6 +2335,7 @@ $('settings-cancel').onclick = () => $('settings-modal').classList.add('hidden')
 $('settings-save').onclick = () => {
   wsSend({ type: 'room-settings', roomId: S.room.id,
     openMic: $('set-openmic').checked,
+    micLocked: $('set-miclock').checked,
     talkLimitSec: parseInt($('set-talklimit').value || '0', 10) });
   $('settings-modal').classList.add('hidden');
 };

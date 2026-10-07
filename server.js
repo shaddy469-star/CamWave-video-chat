@@ -1289,6 +1289,12 @@ function handleModAction(actor, msg) {
   if (target.id === actor.id && msg.action !== 'unmute')
     return send(actor.ws, { type: 'error', message: 'You cannot moderate yourself.' });
   const targetRank = rankOf(room, target.id);
+  // self-unmute is allowed unless the mic is locked (staff bypass)
+  if (target.id === actor.id && msg.action === 'unmute') {
+    const rm = rooms.get(actor.roomId);
+    if (rm && rm.settings.micLocked && !actor.siteOwner && rankOf(rm, actor.id) < 1)
+      return send(actor.ws, { type: 'error', message: '🔒 Mic is locked — only owner & moderators can talk.' });
+  }
   // self-unmute is always allowed; moderating others requires outranking them
   if (target.id !== actor.id && targetRank >= actorRank)
     return send(actor.ws, { type: 'error', message: 'You cannot moderate someone at or above your rank.' });
@@ -1497,6 +1503,10 @@ function handleMessage(ws, raw) {
       if (u.muted) return; // server-muted users stay muted
       const room = rooms.get(u.roomId);
       if (!room) return;
+      if (room.settings.micLocked && !u.siteOwner && rankOf(room, u.id) < 1) {
+        u.muted = true;
+        return send(u.ws, { type: 'force-mute', by: '🔒 Mic lock' });
+      }
       if (!room.settings.openMic && msg.mode !== 'ptt-ok') {
         // PTT mode: mic only live while holding talk button; client handles,
         // server just tracks for UI
@@ -1841,10 +1851,27 @@ function handleMessage(ws, raw) {
 
     case 'room-settings': {
       const room = rooms.get(msg.roomId);
-      if (!room || rankOf(room, u.id) < 2)
-        return send(ws, { type: 'error', message: 'Only admins can change room settings.' });
-      if (typeof msg.openMic === 'boolean') room.settings.openMic = msg.openMic;
-      if (Number.isFinite(msg.talkLimitSec))
+      if (!room || rankOf(room, u.id) < 1)
+        return send(ws, { type: 'error', message: 'Only moderators can change room settings.' });
+      const isAdmin = rankOf(room, u.id) >= 2;
+      if (typeof msg.openMic === 'boolean' && isAdmin) room.settings.openMic = msg.openMic;
+      if (typeof msg.micLocked === 'boolean') {
+        room.settings.micLocked = msg.micLocked;
+        // when locking: mute everyone except staff
+        if (msg.micLocked) {
+          for (const m of roomUsers(room.id)) {
+            if (!m.siteOwner && rankOf(room, m.id) < 1 && !m.muted) {
+              m.muted = true; m.talking = false; m.micLive = false; clearTalkTimer(m);
+              send(m.ws, { type: 'force-mute', by: '🔒 Mic lock' });
+              broadcastRoom(room.id, { type: 'user-muted', id: m.id, name: m.name }, m.id);
+            }
+          }
+          broadcastRoom(room.id, { type: 'notice', text: '🔒 Mic locked — only owner & moderators can talk.' });
+        } else {
+          broadcastRoom(room.id, { type: 'notice', text: '🔓 Mic unlocked.' });
+        }
+      }
+      if (Number.isFinite(msg.talkLimitSec) && isAdmin)
         room.settings.talkLimitSec = Math.max(0, Math.min(600, Math.floor(msg.talkLimitSec)));
       broadcastRoom(room.id, { type: 'room-settings-updated', settings: room.settings });
       pushRoomList();
@@ -1890,7 +1917,7 @@ function makeRoom(name, ownerId) {
   const id = 'r' + (nextRoomId++);
   const room = { id, name, ownerId, admins: new Set(), mods: new Set(),
     bans: new Map(), ipBans: new Set(),
-    settings: { openMic: false, talkLimitSec: 0 },
+    settings: { openMic: false, talkLimitSec: 0, micLocked: false },
     dj: { active: false, mode: null, url: null, volume: 1, by: null } };
   rooms.set(id, room);
   return room;
@@ -1920,7 +1947,7 @@ function seedDirectoryRooms() {
     if (rooms.has(d.id)) continue;
     const room = { id: d.id, name: d.name, ownerId: null, admins: new Set(), mods: new Set(),
       bans: new Map(), ipBans: new Set(), permanent: true, category: d.category,
-      settings: { openMic: false, talkLimitSec: 0 },
+      settings: { openMic: false, talkLimitSec: 0, micLocked: false },
       dj: { active: false, mode: null, url: null, volume: 1, by: null } };
     rooms.set(d.id, room);
     loadRoomHistory(d.id);
