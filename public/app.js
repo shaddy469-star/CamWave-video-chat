@@ -514,8 +514,13 @@ function renderUserList() {
   if (S.siteOwner || (ROLE_RANK[S.room.myRole]||0) >= 1) {
     const lg = document.createElement('div');
     lg.className = 'mic-legend';
-    lg.innerHTML = '🔇 muted &nbsp; 🎙️ live &nbsp; 🔈 off &nbsp; <span style="color:var(--muted)">tap mic to mute/unmute</span>';
+    lg.innerHTML = `🔇 muted &nbsp; 🎙️ live &nbsp; 🔈 off<br>
+      <button id="god-mute-all" class="btn-ghost" style="margin:4px 4px 0 0;padding:6px 10px;font-size:.85em">🔇 Mute all</button>
+      <button id="god-unmute-all" class="btn-ghost" style="margin:4px 0 0;padding:6px 10px;font-size:.85em">🔊 Unmute all</button>
+      <div style="margin-top:4px;color:var(--muted)">tap any mic to mute/unmute</div>`;
     el.prepend(lg);
+    lg.querySelector('#god-mute-all').onclick = (e) => { e.stopPropagation(); wsSend({ type: 'moderate', action: 'mute-all', roomId: S.room.id }); };
+    lg.querySelector('#god-unmute-all').onclick = (e) => { e.stopPropagation(); wsSend({ type: 'moderate', action: 'unmute-all', roomId: S.room.id }); };
   }
 }
 /* quick mute toggle from user list */

@@ -1328,6 +1328,32 @@ function handleModAction(actor, msg) {
       send(target.ws, { type: 'force-unmute', by: actor.name });
       broadcastRoom(room.id, { type: 'user-unmuted', id: target.id, name: target.name, by: actor.name });
       break;
+    case 'mute-all': {
+      let n = 0;
+      for (const m of roomUsers(room.id)) {
+        if (m.id === actor.id || m.siteOwner || rankOf(room, m.id) >= actorRank) continue;
+        if (!m.muted) {
+          m.muted = true; m.talking = false; m.micLive = false; clearTalkTimer(m);
+          send(m.ws, { type: 'force-mute', by: actor.name });
+          broadcastRoom(room.id, { type: 'user-muted', id: m.id, name: m.name }, m.id);
+          n++;
+        }
+      }
+      broadcastRoom(room.id, { type: 'notice', text: `🔇 ${actor.name} muted everyone (${n}).` });
+      break;
+    }
+    case 'unmute-all': {
+      for (const m of roomUsers(room.id)) {
+        if (m.id === actor.id || m.siteOwner) continue;
+        if (m.muted) {
+          m.muted = false;
+          send(m.ws, { type: 'force-unmute', by: actor.name });
+          broadcastRoom(room.id, { type: 'user-unmuted', id: m.id, name: m.name, by: actor.name });
+        }
+      }
+      broadcastRoom(room.id, { type: 'notice', text: `🔊 ${actor.name} unmuted everyone.` });
+      break;
+    }
     case 'kick': {
       send(target.ws, { type: 'kicked', by: actor.name, reason: msg.reason || '' });
       broadcastRoom(room.id, { type: 'notice', text: `${target.name} was kicked by ${actor.name}.` }, target.id);
