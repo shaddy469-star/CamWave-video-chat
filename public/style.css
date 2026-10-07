@@ -249,6 +249,20 @@ body {
 @keyframes gift-pop { 0% { transform: scale(0) rotate(-15deg); } 100% { transform: scale(1) rotate(0); } }
 @keyframes gift-shake { 0%, 100% { transform: translate(0); } 25% { transform: translate(-5px, 3px); } 50% { transform: translate(4px, -4px); } 75% { transform: translate(-3px, -2px); } }
 
+/* coin shop */
+.coin-packages { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.coin-pack {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; border-radius: 12px; cursor: pointer;
+  background: rgba(255,193,7,.08); border: 1px solid rgba(255,193,7,.35);
+  color: var(--fg); font-size: 1em;
+}
+.coin-pack:hover { border-color: #ffc107; transform: scale(1.02); }
+.coin-pack:disabled { opacity: .5; cursor: wait; }
+.coin-pack .cp-tag { font-size: .75em; color: var(--muted); flex: 1; text-align: left; }
+.coin-pack .cp-coins { font-weight: 800; color: #ffd54f; font-size: 1.1em; }
+.coin-pack .cp-price { font-weight: 700; color: #7CFC00; }
+
 /* room directory sections */
 .room-section { margin-bottom: 18px; }
 .room-section h2 { font-size: 1.05em; margin: 0 0 8px; color: var(--accent3); }

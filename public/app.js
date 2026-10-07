@@ -787,6 +787,46 @@ function openGiftShop(toId) {
 $('gift-close').onclick = () => $('gift-modal').classList.add('hidden');
 $('gift-shop-btn').onclick = () => openGiftShop(null);
 
+/* ---- coin shop (real-money top-ups) ---- */
+$('buy-coins-btn').onclick = async () => {
+  $('coin-modal').classList.remove('hidden');
+  const el = $('coin-packages');
+  el.innerHTML = '<p class="fineprint">Loading…</p>';
+  try {
+    const r = await fetch('/api/coin-shop');
+    const j = await r.json();
+    el.innerHTML = '';
+    if (!j.stripeReady) {
+      el.innerHTML = '<p class="fineprint">💳 Card purchases coming soon — for now earn free coins: +🪙100 welcome, +🪙50 daily, +🪙10 per trivia win.</p>';
+      return;
+    }
+    for (const p of j.packages) {
+      const b = document.createElement('button');
+      b.className = 'coin-pack';
+      b.innerHTML = `<span class="cp-tag">${esc(p.tag)}</span><span class="cp-coins">🪙 ${p.coins.toLocaleString()}</span><span class="cp-price">$${p.usd}</span>`;
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          const rr = await fetch('/api/create-checkout', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ packageId: p.id, user: S.myName }),
+          });
+          const jj = await rr.json();
+          if (!rr.ok) throw new Error(jj.error || 'Checkout failed.');
+          location.href = jj.url;
+        } catch (e) { toast('⚠️ ' + e.message); b.disabled = false; }
+      };
+      el.appendChild(b);
+    }
+  } catch { el.innerHTML = '<p class="fineprint">Could not load coin shop.</p>'; }
+};
+$('coin-close').onclick = () => $('coin-modal').classList.add('hidden');
+// after Stripe checkout, show confirmation
+if (new URLSearchParams(location.search).get('coins') === 'success') {
+  history.replaceState(null, '', location.pathname);
+  setTimeout(() => toast('🎉 Payment complete — your coins are on the way!'), 1500);
+}
+
 function giftCelebration(evt) {
   const ov = document.createElement('div');
   ov.id = 'gift-overlay';

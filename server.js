@@ -18,6 +18,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -163,6 +164,100 @@ function claimDaily(name) {
   gDaily.set(k, today);
   persistWrite(upstash('HSET', 'camwave:daily', k, today));
   return DAILY_COINS;
+}
+
+/* ---- real-money coin shop (Stripe) ----
+   Money goes directly to YOUR Stripe account (your keys = your bank).
+   Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET in Render env to activate. */
+const COIN_PACKAGES = [
+  { id: 'c100',  coins: 100,  price: 99,   tag: 'Starter' },
+  { id: 'c550',  coins: 550,  price: 499,  tag: 'Popular' },
+  { id: 'c1200', coins: 1200, price: 999,  tag: 'Best value' },
+  { id: 'c3000', coins: 3000, price: 2499, tag: 'Whale' },
+  { id: 'c7000', coins: 7000, price: 4999, tag: 'Ballin’' },
+];
+const APP_URL = process.env.APP_URL || 'https://camwave-video-chat-1.onrender.com';
+function handleCoinShop(req, res) {
+  const pkgs = COIN_PACKAGES.map(p => ({ id: p.id, coins: p.coins, usd: (p.price / 100).toFixed(2), tag: p.tag }));
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ packages: pkgs, stripeReady: !!process.env.STRIPE_SECRET_KEY }));
+}
+async function handleCreateCheckout(req, res) {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    res.writeHead(501, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Coin purchases are not set up yet.' }));
+  }
+  let body = '';
+  req.on('data', c => { body += c; if (body.length > 1e5) req.destroy(); });
+  req.on('end', async () => {
+    try {
+      const { packageId, user } = JSON.parse(body || '{}');
+      const pkg = COIN_PACKAGES.find(p => p.id === packageId);
+      if (!pkg || !user || typeof user !== 'string') throw new Error('Bad request.');
+      const params = new URLSearchParams();
+      params.append('mode', 'payment');
+      params.append('success_url', APP_URL + '/?coins=success');
+      params.append('cancel_url', APP_URL + '/');
+      params.append('line_items[0][price_data][currency]', 'usd');
+      params.append('line_items[0][price_data][product_data][name]', pkg.coins + ' CamWave Coins');
+      params.append('line_items[0][price_data][unit_amount]', String(pkg.price));
+      params.append('line_items[0][quantity]', '1');
+      params.append('client_reference_id', user.slice(0, 40));
+      params.append('metadata[coins]', String(pkg.coins));
+      params.append('metadata[user]', user.slice(0, 40));
+      params.append('metadata[package]', pkg.id);
+      const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error((j.error && j.error.message) || 'Stripe error.');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ url: j.url }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+async function handleStripeWebhook(req, res) {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const chunks = [];
+  req.on('data', c => { chunks.push(c); if (chunks.length > 100) req.destroy(); });
+  req.on('end', () => {
+    try {
+      const raw = Buffer.concat(chunks);
+      const rawStr = raw.toString('utf8');
+      if (secret) {
+        const sig = req.headers['stripe-signature'] || '';
+        const parts = {};
+        for (const p of sig.split(',')) { const kv = p.split('='); parts[kv[0]] = kv[1]; }
+        if (!parts.t || !parts.v1) throw new Error('Missing signature.');
+        const expected = crypto.createHmac('sha256', secret).update(parts.t + '.' + rawStr).digest('hex');
+        if (!crypto.timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected)))
+          throw new Error('Bad signature.');
+      }
+      const evt = JSON.parse(rawStr);
+      if (evt.type === 'checkout.session.completed') {
+        const s = evt.data.object || {};
+        const coins = parseInt(s.metadata && s.metadata.coins, 10);
+        const user = s.metadata && s.metadata.user;
+        if (coins > 0 && user) {
+          const bal = addCoins(user, coins);
+          const uid = nameToId.get(String(user).toLowerCase());
+          const u = uid && users.get(uid);
+          if (u) send(u.ws, { type: 'coins', balance: bal });
+          console.log(`coin shop: ${user} bought ${coins} coins`);
+        }
+      }
+      res.writeHead(200); res.end('ok');
+    } catch (e) {
+      console.warn('stripe webhook:', e.message);
+      res.writeHead(400); res.end('bad');
+    }
+  });
 }
 
 /* ============================== bots ==============================
@@ -544,7 +639,13 @@ function serveStatic(req, res) {
   });
 }
 
-const server = http.createServer(serveStatic);
+const server = http.createServer((req, res) => {
+  const urlPath = req.url.split('?')[0];
+  if (urlPath === '/api/coin-shop' && req.method === 'GET') return handleCoinShop(req, res);
+  if (urlPath === '/api/create-checkout' && req.method === 'POST') return handleCreateCheckout(req, res);
+  if (urlPath === '/api/stripe-webhook' && req.method === 'POST') return handleStripeWebhook(req, res);
+  serveStatic(req, res);
+});
 const wss = new WebSocketServer({ server });
 
 /* ------------------------------------------------------------------ */

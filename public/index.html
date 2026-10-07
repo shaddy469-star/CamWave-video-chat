@@ -58,6 +58,7 @@
     <div class="me">
       <span id="my-name"></span>
       <span id="coin-balance" class="coin-pill" title="Your coins">🪙 0</span>
+      <button id="buy-coins-btn" class="btn-ghost" title="Buy coins">＋</button>
       <button id="siteowner-btn" class="hidden" title="Edit welcome letterhead">👑</button>
       <button id="photo-btn" title="Set profile photo">📷</button>
       <input type="file" id="photo-input" accept="image/*" class="hidden">
@@ -275,6 +276,18 @@
         <button id="gift-close" class="btn-ghost">Close</button>
       </div>
       <p class="fineprint">Win trivia for +🪙10 · +🪙50 daily bonus on login</p>
+    </div>
+  </div>
+
+  <!-- ===== COIN SHOP ===== -->
+  <div id="coin-modal" class="modal hidden">
+    <div class="modal-card gift-shop">
+      <h3>🪙 Buy coins</h3>
+      <div id="coin-packages" class="coin-packages"></div>
+      <div class="row">
+        <button id="coin-close" class="btn-ghost">Close</button>
+      </div>
+      <p class="fineprint">Secure checkout · coins are credited instantly</p>
     </div>
   </div>
 </div>
