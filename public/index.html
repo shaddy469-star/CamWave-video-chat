@@ -123,6 +123,7 @@
           <div id="mic-meter" style="display:none"><div id="mic-meter-fill"></div></div>
           <button id="ptt-btn" class="ctl ptt" title="Hold to talk">🔊 HOLD TO TALK</button>
           <button id="dj-btn" class="ctl hidden" title="DJ mode">🎧 DJ</button>
+          <button id="jukebox-btn" class="ctl" title="Jukebox">🎵</button>
           <button id="sound-toggle" class="ctl" title="Join/leave sounds">🔔</button>
           <button id="gift-btn" class="ctl" title="Send gift">🎁</button>
         </div>
@@ -201,6 +202,21 @@
       </div>
       <h4>🚫 Ban list</h4>
       <div id="ban-list" class="ban-list"></div>
+    </div>
+  </div>
+
+  <!-- ===== JUKEBOX MODAL ===== -->
+  <div id="jukebox-modal" class="modal hidden">
+    <div class="modal-card" style="max-width:520px">
+      <h3>🎵 Jukebox</h3>
+      <div id="jukebox-tabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap"></div>
+      <div id="jukebox-list" style="max-height:300px;overflow-y:auto"></div>
+      <div id="jukebox-add" class="hidden" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+        <div class="row"><input id="jb-name" placeholder="Track name"></div>
+        <div class="row"><input id="jb-url" placeholder="MP3 URL (https://)"></div>
+        <div class="row"><button id="jb-add-btn" class="btn-primary">➕ Add track</button></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button id="jukebox-close" class="btn-ghost">Close</button></div>
     </div>
   </div>
 

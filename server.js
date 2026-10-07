@@ -367,6 +367,8 @@ function greetJoiner(roomId, room, u) {
 
 // ---- trivia ----
 const profiles = new Map(); // name -> { bio: '', photos: [] }
+const jukebox = new Map(); // genre -> [{ name, url }]
+['rap','techno','country','pop','rock'].forEach(g => jukebox.set(g, []));
 const kickLockouts = new Map(); // name(lower) -> timestamp (2hr rejoin block)
 const restrictedUsers = new Map(); // name(lower) -> { by, ts, reason }
 function getProfile(name) {
@@ -815,6 +817,11 @@ function roleOf(room, userId) {
 }
 function rankOf(room, userId) { return ROLE_RANK[roleOf(room, userId)] ?? 0; }
 
+function jukeboxToObj() {
+  const o = {};
+  for (const [g, tracks] of jukebox) o[g] = tracks;
+  return o;
+}
 function publicUser(u) {
   return { id: u.id, name: u.name, gender: u.gender, age: u.age, status: u.status, muted: !!u.muted,
            micLive: !!u.micLive, videoOn: !!u.videoOn, talking: !!u.talking, photo: u.photo || null,
@@ -1926,6 +1933,22 @@ function handleMessage(ws, raw) {
       break;
     }
 
+    case 'jukebox-add': {
+      if (!u.siteOwner && rankOf(rooms.get(msg.roomId), u.id) < 2)
+        return send(ws, { type: 'error', message: 'Only admins can add jukebox tracks.' });
+      const g = String(msg.genre || '').toLowerCase();
+      if (!jukebox.has(g)) return;
+      jukebox.get(g).push({ name: String(msg.name || 'Untitled').slice(0, 80), url: String(msg.url || '') });
+      broadcastRoom(msg.roomId, { type: 'jukebox-updated', playlists: jukeboxToObj() });
+      break;
+    }
+    case 'jukebox-remove': {
+      if (!u.siteOwner && rankOf(rooms.get(msg.roomId), u.id) < 2) return;
+      const g = String(msg.genre || '').toLowerCase();
+      if (jukebox.has(g)) jukebox.set(g, jukebox.get(g).filter((_, i) => i !== (msg.index | 0)));
+      broadcastRoom(msg.roomId, { type: 'jukebox-updated', playlists: jukeboxToObj() });
+      break;
+    }
     case 'dj': {
       // { action:'start-file'|'start-url'|'stop'|'volume', url?, volume? }
       const room = rooms.get(u.roomId);
@@ -2076,6 +2099,7 @@ function joinRoom(u, roomId) {
     selfMuted: u.muted,
     giftGoal: giftGoal(roomId) });
   send(u.ws, { type: 'room-history', messages: roomHistory.get(roomId) || [] });
+  send(u.ws, { type: 'jukebox-updated', playlists: jukeboxToObj() });
   broadcastRoom(roomId, { type: 'user-joined',
     user: { ...publicUser(u), role: roleOf(room, u.id) } }, u.id);
   // track the visit (counter + visitor profile)

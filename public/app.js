@@ -210,6 +210,7 @@ function onServer(m) {
       S.selfMuted = false; renderUserList();
       toast('🔊 Unmuted by ' + m.by + ' — you may talk now'); break;
     case 'talk-timer': startTalkCountdown(m.limitSec); break;
+    case 'jukebox-updated': jbPlaylists = m.playlists || {}; if (!$('jukebox-modal').classList.contains('hidden')) renderJukebox(); break;
   case 'talk-timeout':
       setMicEnabled(false, true); toast(`⏱ Talk time limit (${m.limitSec}s) reached — mic auto-muted`); break;
     case 'kicked': {
@@ -2745,3 +2746,52 @@ function blastToxicNoise() {
     });
   } catch {}
 }
+
+/* ============================== JUKEBOX ============================== */
+const JB_GENRES = ['rap','techno','country','pop','rock'];
+const JB_ICONS = { rap: '🎤', techno: '🎛️', country: '🤠', pop: '⭐', rock: '🎸' };
+let jbPlaylists = {}, jbGenre = 'rap';
+$('jukebox-btn').onclick = () => { renderJukebox(); $('jukebox-modal').classList.remove('hidden'); };
+$('jukebox-close').onclick = () => $('jukebox-modal').classList.add('hidden');
+function renderJukebox() {
+  const tabs = $('jukebox-tabs'); tabs.innerHTML = '';
+  for (const g of JB_GENRES) {
+    const b = document.createElement('button');
+    b.className = 'btn-ghost' + (g === jbGenre ? ' active' : '');
+    b.textContent = `${JB_ICONS[g]} ${g[0].toUpperCase() + g.slice(1)}`;
+    b.onclick = () => { jbGenre = g; renderJukebox(); };
+    tabs.appendChild(b);
+  }
+  const list = $('jukebox-list'); list.innerHTML = '';
+  const tracks = (jbPlaylists[jbGenre] || []);
+  const canAdd = S.siteOwner || ['owner','admin'].includes(S.room?.myRole);
+  $('jukebox-add').classList.toggle('hidden', !canAdd);
+  if (!tracks.length) {
+    list.innerHTML = `<p style="color:var(--muted)">No tracks yet. ${canAdd ? 'Add some below!' : ''}</p>`;
+  }
+  tracks.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'user-row';
+    row.innerHTML = `<span class="nm"><b>${esc(t.name)}</b></span>
+      <span><button class="btn-ghost jb-play" data-i="${i}">▶</button>
+      ${canAdd ? `<button class="btn-ghost jb-del" data-i="${i}">🗑️</button>` : ''}</span>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('.jb-play').forEach(b => b.onclick = () => {
+    const t = tracks[b.dataset.i | 0];
+    if (!t) return;
+    startDjUrl(t.url, S.myName);
+    wsSend({ type: 'dj', action: 'start-url', url: t.url });
+    $('jukebox-modal').classList.add('hidden');
+    toast(`🎵 Now playing: ${t.name}`);
+  });
+  list.querySelectorAll('.jb-del').forEach(b => b.onclick = () => {
+    wsSend({ type: 'jukebox-remove', genre: jbGenre, index: b.dataset.i | 0, roomId: S.room.id });
+  });
+}
+$('jb-add-btn').onclick = () => {
+  const name = $('jb-name').value.trim(), url = $('jb-url').value.trim();
+  if (!name || !/^https?:\/\//i.test(url)) return toast('Enter a name and valid MP3 URL.');
+  wsSend({ type: 'jukebox-add', genre: jbGenre, name, url, roomId: S.room.id });
+  $('jb-name').value = ''; $('jb-url').value = '';
+};
