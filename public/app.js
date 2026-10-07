@@ -326,8 +326,8 @@ function roomCard(r) {
       <span class="rc-emoji">${emoji}</span>
       ${r.private ? '<span class="rc-live">PRIVATE</span>' : (r.userCount > 0 ? '<span class="rc-live">LIVE</span>' : '')}
       <span class="rc-views">👁 ${r.userCount}</span>
-      <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
     </div>
+    <div class="rc-name">${esc(r.name)}${r.private ? ' 👁️' : ''}</div>
     <div class="rc-meta">${r.private ? '👁️ tap to watch invisibly' : (r.openMic ? '🎙 open mic' : '🔊 push-to-talk')}${r.djActive ? ' · 🎧 DJ' : ''}</div>
     ${r.visits ? `<div class="rc-visits">📊 ${r.visits.toLocaleString()} visited</div>` : ''}`;
   d.onclick = () => {
