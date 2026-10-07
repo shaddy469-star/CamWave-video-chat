@@ -52,6 +52,7 @@
     <div class="brand"><img src="/icon-192.png" alt=""><strong>Cam<span>Wave</span></strong></div>
     <div class="me">
       <span id="my-name"></span>
+      <button id="siteowner-btn" class="hidden" title="Edit welcome letterhead">👑</button>
       <select id="status-select" title="Your status">
         <option value="online">🟢 Online</option>
         <option value="away">🟡 Away</option>
@@ -176,6 +177,39 @@
 
   <!-- ===== USER ACTION POPUP ===== -->
   <div id="user-popup" class="popup hidden"></div>
+
+  <!-- ===== WELCOME LETTERHEAD ===== -->
+  <div id="letterhead-modal" class="modal hidden">
+    <div class="modal-card letterhead">
+      <h2 id="lh-title">👑 Welcome to CamWave</h2>
+      <p id="lh-body" class="lh-body"></p>
+      <p id="lh-contact" class="fineprint"></p>
+      <div class="modal-actions"><button id="lh-enter" class="btn-primary">Enter CamWave</button></div>
+    </div>
+  </div>
+
+  <!-- ===== WARNING ===== -->
+  <div id="warned-modal" class="modal hidden">
+    <div class="modal-card warn-card">
+      <h2>⚠️ You've been warned</h2>
+      <p id="warned-text" class="lh-body"></p>
+      <div class="modal-actions"><button id="warned-ok" class="btn-primary">Understood</button></div>
+    </div>
+  </div>
+
+  <!-- ===== SITE BANNER EDITOR (owner) ===== -->
+  <div id="sitebanner-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>👑 Welcome letterhead <span class="pill">shown at every login</span></h3>
+      <div class="row"><input id="sb-title" placeholder="Title" maxlength="80"></div>
+      <div class="row"><textarea id="sb-body" rows="6" placeholder="Rules and welcome message…" maxlength="1000"></textarea></div>
+      <div class="row"><input id="sb-contact" placeholder="How to contact you…" maxlength="200"></div>
+      <div class="row">
+        <button id="sb-save" class="btn-primary">💾 Save</button>
+      </div>
+      <div class="modal-actions"><button id="sb-close" class="btn-ghost">Close</button></div>
+    </div>
+  </div>
 </div>
 
 <script src="/app.js"></script>

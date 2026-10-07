@@ -157,6 +157,15 @@ body {
 .user-row.ledger-row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-row.ledger-row .nm b { font-weight: 700; }
 .user-row.ledger-row .who { color: var(--accent3); font-weight: 600; white-space: nowrap; margin-left: 8px; }
+
+/* letterhead + warnings */
+.modal-card.letterhead { border: 2px solid var(--accent); text-align: center; }
+.modal-card.letterhead h2 { margin-top: 0; }
+.lh-body { white-space: pre-line; text-align: left; line-height: 1.5; }
+.modal-card.warn-card { border: 2px solid #e5484d; }
+.modal-card.warn-card h2 { color: #e5484d; margin-top: 0; }
+#sitebanner-modal textarea { width: 100%; background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; resize: vertical; }
+#siteowner-btn { background: none; border: none; font-size: 1.2em; cursor: pointer; }
 .activity-log { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
 .activity-row { font-size: .82em; color: var(--muted); padding: 3px 8px; background: var(--bg2); border-radius: 7px; }
 .activity-row b { color: var(--text); }

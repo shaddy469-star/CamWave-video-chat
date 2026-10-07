@@ -3,9 +3,12 @@
  *
  * - Serves the static client from ./public
  * - WebSocket signaling for WebRTC (mesh) inside rooms
- * - In-memory state only: rooms, users, bans, contacts, DMs.
+ * - In-memory state: rooms, users, contacts, DMs.
+ * - Bans + welcome banner persist via Upstash Redis REST when
+ *   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are set;
+ *   otherwise they are memory-only too.
  *   NOTE: Render's free tier sleeps after ~15 min idle and restarts lose
- *   all in-memory state (rooms, bans, contacts). That's expected here.
+ *   all in-memory state. That's expected here.
  *
  * Run:  npm start          (reads PORT from env, required by Render)
  */
@@ -39,6 +42,63 @@ const rooms = new Map();
 const nameToId = new Map();
 // userId -> [{from,to,text,ts}]  (kept in memory, last 100 per pair)
 const dmHistory = new Map();
+
+// ---- Persistent global bans (survive restarts) ----
+// Backed by Upstash Redis REST when UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+// are set; otherwise bans live in memory only (lost on restart, like before).
+const gIpBans = new Set();            // ip -> true
+const gNameBans = new Map();          // lowerName -> {name, ip, by, ts}
+const UP_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '');
+const UP_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const persistOn = !!(UP_URL && UP_TOKEN);
+
+async function upstash(...parts) {
+  if (!persistOn) return null;
+  const url = UP_URL + '/' + parts.map(p => encodeURIComponent(String(p))).join('/');
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + UP_TOKEN } });
+  if (!r.ok) throw new Error('upstash http ' + r.status);
+  const j = await r.json();
+  if (j.error) throw new Error('upstash: ' + j.error);
+  return j.result;
+}
+// fire-and-forget writer; logs instead of crashing the request path
+function persistWrite(p) {
+  if (p && typeof p.catch === 'function') p.catch(e => console.warn('ban persist:', e.message));
+}
+async function loadPersistedBans() {
+  if (!persistOn) { console.log('ban persistence: not configured (memory only)'); return; }
+  try {
+    const ips = await upstash('SMEMBERS', 'camwave:ipbans');
+    if (Array.isArray(ips)) ips.forEach(ip => { if (ip) gIpBans.add(ip); });
+    const raw = await upstash('HGETALL', 'camwave:namebans');
+    let entries = {};
+    if (Array.isArray(raw)) {
+      for (let i = 0; i + 1 < raw.length; i += 2) entries[raw[i]] = raw[i + 1];
+    } else if (raw && typeof raw === 'object') entries = raw;
+    for (const [k, v] of Object.entries(entries)) {
+      try { const rec = JSON.parse(v); if (rec && rec.name) gNameBans.set(k, rec); } catch {}
+    }
+    console.log(`ban persistence: loaded ${gIpBans.size} ip bans, ${gNameBans.size} name bans`);
+  } catch (e) { console.warn('ban persistence unavailable:', e.message); }
+}
+
+// ---- Site owner + welcome letterhead ----
+const SITE_OWNER = process.env.SITE_OWNER || 'ShadRick';
+let siteBanner = {
+  title: '👑 Welcome to CamWave',
+  body: `This is ${SITE_OWNER}'s house.\n\nBe cool: no mic hogging, no spam, no hate, no creeping.\nBreak the rules and you'll be warned — then muted, kicked, or banned.\nThe boss is always watching. 👀`,
+  contact: `📬 Reach the boss: send ${SITE_OWNER} a message in chat.`
+};
+async function loadSiteBanner() {
+  if (!persistOn) return;
+  try {
+    const raw = await upstash('GET', 'camwave:sitebanner');
+    if (raw) { const b = JSON.parse(raw); if (b && b.title) siteBanner = b; }
+  } catch (e) { console.warn('site banner load:', e.message); }
+}
+function persistBanner() {
+  persistWrite(upstash('SET', 'camwave:sitebanner', JSON.stringify(siteBanner)));
+}
 
 const ROLE_RANK = { member: 0, moderator: 1, admin: 2, owner: 3 };
 
@@ -216,18 +276,46 @@ function handleModAction(actor, msg) {
   const target = users.get(msg.targetId);
   const actorRank = rankOf(room, actor.id);
 
-  const needRank = { mute: 1, unmute: 1, kick: 1, ban: 2, ipban: 2, unban: 2,
+  const needRank = { mute: 1, unmute: 1, kick: 1, warn: 1, ban: 2, ipban: 2, unban: 2,
                      'promote-mod': 2, 'promote-admin': 3, demote: 2 }[msg.action];
   if (needRank == null) return send(actor.ws, { type: 'error', message: 'Unknown mod action.' });
   if (actorRank < needRank)
     return send(actor.ws, { type: 'error', message: 'You do not have permission for that.' });
 
   if (msg.action === 'unban') {
-    // targetId here is the banned user id
+    // targetId here is the banned user id, or g:<name> / gip:<ip> for persistent global bans
+    const tid = String(msg.targetId || '');
+    if (tid.startsWith('g:')) {
+      const lname = tid.slice(2);
+      const rec = gNameBans.get(lname);
+      if (!rec) return send(actor.ws, { type: 'error', message: 'User is not banned.' });
+      gNameBans.delete(lname);
+      persistWrite(upstash('HDEL', 'camwave:namebans', lname));
+      if (rec.ip) { gIpBans.delete(rec.ip); persistWrite(upstash('SREM', 'camwave:ipbans', rec.ip)); }
+      broadcastRoom(room.id, { type: 'notice', text: `${rec.name} was unbanned by ${actor.name}.` });
+      send(actor.ws, { type: 'ban-list', bans: banList(room) });
+      return;
+    }
+    if (tid.startsWith('gip:')) {
+      const ip = tid.slice(4);
+      if (!gIpBans.has(ip)) return send(actor.ws, { type: 'error', message: 'IP is not banned.' });
+      gIpBans.delete(ip);
+      persistWrite(upstash('SREM', 'camwave:ipbans', ip));
+      broadcastRoom(room.id, { type: 'notice', text: `IP ${ip} was unbanned by ${actor.name}.` });
+      send(actor.ws, { type: 'ban-list', bans: banList(room) });
+      return;
+    }
     const rec = room.bans.get(msg.targetId);
     if (!rec) return send(actor.ws, { type: 'error', message: 'User is not banned.' });
     room.bans.delete(msg.targetId);
     room.ipBans.delete(rec.ip);
+    // also clear the persistent global records
+    if (rec.ip) { gIpBans.delete(rec.ip); persistWrite(upstash('SREM', 'camwave:ipbans', rec.ip)); }
+    if (rec.name) {
+      const lname = rec.name.toLowerCase();
+      gNameBans.delete(lname);
+      persistWrite(upstash('HDEL', 'camwave:namebans', lname));
+    }
     broadcastRoom(room.id, { type: 'notice', text: `${rec.name} was unbanned by ${actor.name}.` });
     send(actor.ws, { type: 'ban-list', bans: banList(room) });
     return;
@@ -245,6 +333,14 @@ function handleModAction(actor, msg) {
       send(target.ws, { type: 'force-mute', by: actor.name });
       broadcastRoom(room.id, { type: 'user-muted', id: target.id, name: target.name, by: actor.name });
       break;
+    case 'warn': {
+      const reason = String(msg.reason || '').slice(0, 200);
+      target.warnCount = (target.warnCount | 0) + 1;
+      send(target.ws, { type: 'warned', by: actor.name, reason, count: target.warnCount });
+      broadcastRoom(room.id, { type: 'notice',
+        text: `⚠️ ${target.name} was warned by ${actor.name}${reason ? ': ' + reason : ''} (strike ${target.warnCount})` });
+      break;
+    }
     case 'unmute':
       target.muted = false;
       send(target.ws, { type: 'force-unmute', by: actor.name });
@@ -260,6 +356,15 @@ function handleModAction(actor, msg) {
     case 'ipban': {
       room.bans.set(target.id, { name: target.name, ip: target.ip, ts: Date.now(), by: actor.name });
       if (msg.action === 'ipban' && target.ip && target.ip !== 'unknown') room.ipBans.add(target.ip);
+      // persistent global bans — survive restarts
+      const lname = target.name.toLowerCase();
+      const grec = { name: target.name, ip: target.ip, by: actor.name, ts: Date.now() };
+      gNameBans.set(lname, grec);
+      persistWrite(upstash('HSET', 'camwave:namebans', lname, JSON.stringify(grec)));
+      if (msg.action === 'ipban' && target.ip && target.ip !== 'unknown') {
+        gIpBans.add(target.ip);
+        persistWrite(upstash('SADD', 'camwave:ipbans', target.ip));
+      }
       send(target.ws, { type: 'banned', by: actor.name,
         message: msg.action === 'ipban' ? 'You have been IP-banned from this room.' : 'You have been banned from this room.' });
       broadcastRoom(room.id, { type: 'notice',
@@ -287,7 +392,17 @@ function handleModAction(actor, msg) {
 }
 
 function banList(room) {
-  return [...room.bans.entries()].map(([id, r]) => ({ id, name: r.name, ip: r.ip, by: r.by, ts: r.ts }));
+  const out = [...room.bans.entries()].map(([id, r]) => ({ id, name: r.name, ip: r.ip, by: r.by, ts: r.ts }));
+  const seenNames = new Set(out.map(b => (b.name || '').toLowerCase()));
+  const seenIps = new Set(out.map(b => b.ip));
+  // persistent global bans (visible even after a restart wiped the room list)
+  for (const [lname, r] of gNameBans) {
+    if (!seenNames.has(lname)) out.push({ id: 'g:' + lname, name: r.name, ip: r.ip || '', by: r.by, ts: r.ts });
+  }
+  for (const ip of gIpBans) {
+    if (ip && !seenIps.has(ip)) out.push({ id: 'gip:' + ip, name: '(IP ban)', ip, by: '', ts: 0 });
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -313,11 +428,12 @@ function handleMessage(ws, raw) {
       if (!Number.isFinite(age) || age < 13 || age > 120)
         return send(ws, { type: 'error', message: 'Enter your age (13–120).' });
       const user = { id, name, gender, age, ip: ws._ip, ws, status: 'online', roomId: null,
-                     contacts: new Set(), muted: false, micLive: false, videoOn: false, talking: false, talkTimer: null };
+                     contacts: new Set(), muted: false, micLive: false, videoOn: false, talking: false, talkTimer: null,
+                     siteOwner: name === SITE_OWNER };
       ws._user = user;
       users.set(id, user);
       nameToId.set(name.toLowerCase(), id);
-      send(ws, { type: 'welcome', id, name, gender, age });
+      send(ws, { type: 'welcome', id, name, gender, age, siteOwner: user.siteOwner, siteBanner });
       // Seed a default room so the directory is never empty.
       // System-owned until someone joins, then the first joiner owns it.
       if (rooms.size === 0) makeRoom('Lobby', null);
@@ -458,6 +574,20 @@ function handleMessage(ws, raw) {
       break;
     }
 
+    case 'site-banner': {
+      if (msg.action === 'set') {
+        if (!u.siteOwner) return send(ws, { type: 'error', message: 'Only the site owner can do that.' });
+        if (typeof msg.title === 'string' && msg.title.trim()) siteBanner.title = msg.title.trim().slice(0, 80);
+        if (typeof msg.body === 'string' && msg.body.trim()) siteBanner.body = msg.body.trim().slice(0, 1000);
+        if (typeof msg.contact === 'string') siteBanner.contact = msg.contact.trim().slice(0, 200);
+        persistBanner();
+        broadcastAll({ type: 'site-banner', banner: siteBanner });
+      } else {
+        send(ws, { type: 'site-banner', banner: siteBanner });
+      }
+      break;
+    }
+
     case 'room-settings': {
       const room = rooms.get(msg.roomId);
       if (!room || rankOf(room, u.id) < 2)
@@ -520,11 +650,16 @@ function joinRoom(u, roomId) {
   if (!room) return send(u.ws, { type: 'error', message: 'Room not found.' });
   if (u.roomId === roomId) return;
 
-  // Ban checks
+  // Ban checks (per-room, this session)
   const banRec = room.bans.get(u.id);
   if (banRec) return send(u.ws, { type: 'error', message: `You are banned from "${room.name}".` });
   if (u.ip && u.ip !== 'unknown' && room.ipBans.has(u.ip))
     return send(u.ws, { type: 'error', message: `Your IP is banned from "${room.name}".` });
+  // Persistent global bans (survive restarts)
+  if (u.ip && u.ip !== 'unknown' && gIpBans.has(u.ip))
+    return send(u.ws, { type: 'error', message: 'Your IP is banned from CamWave.' });
+  if (u.name && gNameBans.has(u.name.toLowerCase()))
+    return send(u.ws, { type: 'error', message: 'You are banned from CamWave.' });
 
   if (u.roomId) doLeaveRoom(u);
   u.roomId = roomId;
@@ -619,4 +754,6 @@ setInterval(() => {
 
 server.listen(PORT, () => {
   console.log(`CamWave listening on port ${PORT}`);
+  loadPersistedBans();
+  loadSiteBanner();
 });

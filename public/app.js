@@ -42,12 +42,19 @@ function onServer(m) {
   switch (m.type) {
     case 'welcome':
       S.myId = m.id; S.myName = m.name; S.myGender = m.gender; S.myAge = m.age;
+      S.siteOwner = !!m.siteOwner;
       localStorage.setItem('camwave_nick', m.name);
       $('login-screen').classList.add('hidden');
       $('app').classList.remove('hidden');
       $('my-name').textContent = m.name;
+      $('siteowner-btn').classList.toggle('hidden', !S.siteOwner);
+      if (m.siteBanner) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
       wsSend({ type: 'get-contacts' });
       break;
+    case 'site-banner':
+      S.siteBanner = m.banner; break;
+    case 'warned':
+      showWarned(m); break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -287,6 +294,7 @@ function showUserPopup(u, x, y) {
   html += `<button data-a="view">📹 View camera</button>`;
   html += `<button data-a="dm">💬 Message</button>`;
   if (rank >= 1) {
+    html += `<button data-a="warn">⚠️ Warn</button>`;
     html += `<button data-a="mute">${u.muted ? '🔊 Unmute' : '🔇 Mute'}</button>`;
     html += `<button data-a="kick" class="danger">👢 Kick</button>`;
   }
@@ -314,6 +322,11 @@ document.addEventListener('click', e => {
 function userAction(a, u) {
   if (a === 'view') { spotlight(u.id); return; }
   if (a === 'dm') { openDm(u.id, u.name); return; }
+  if (a === 'warn') {
+    const reason = prompt(`Warn ${u.name} — reason (optional):`) || '';
+    wsSend({ type: 'mod-action', action: 'warn', targetId: u.id, roomId: S.room.id, reason: reason.slice(0, 200) });
+    return;
+  }
   const map = { mute: u.muted ? 'unmute' : 'mute', kick: 'kick', ban: 'ban', ipban: 'ipban',
                 'promote-mod': 'promote-mod', 'promote-admin': 'promote-admin', demote: 'demote' };
   const action = map[a];
@@ -323,6 +336,38 @@ function userAction(a, u) {
   }
   wsSend({ type: 'mod-action', action, targetId: u.id, roomId: S.room.id });
 }
+
+/* ============================== letterhead + warnings ============================== */
+function showLetterhead(b) {
+  $('lh-title').textContent = b.title || '👑 Welcome to CamWave';
+  $('lh-body').textContent = b.body || '';
+  $('lh-contact').textContent = b.contact || '';
+  $('letterhead-modal').classList.remove('hidden');
+}
+$('lh-enter').onclick = () => $('letterhead-modal').classList.add('hidden');
+
+function showWarned(m) {
+  const reason = m.reason ? `\nReason: ${m.reason}` : '';
+  $('warned-text').textContent = `${m.by} has given you an official warning (strike ${m.count}).${reason}\n\nKeep breaking the rules and you'll be muted, kicked, or banned.`;
+  $('warned-modal').classList.remove('hidden');
+}
+$('warned-ok').onclick = () => $('warned-modal').classList.add('hidden');
+
+/* site banner editor (site owner only) */
+$('siteowner-btn').onclick = () => {
+  const b = S.siteBanner || {};
+  $('sb-title').value = b.title || '';
+  $('sb-body').value = b.body || '';
+  $('sb-contact').value = b.contact || '';
+  $('sitebanner-modal').classList.remove('hidden');
+};
+$('sb-close').onclick = () => $('sitebanner-modal').classList.add('hidden');
+$('sb-save').onclick = () => {
+  wsSend({ type: 'site-banner', action: 'set',
+    title: $('sb-title').value, body: $('sb-body').value, contact: $('sb-contact').value });
+  $('sitebanner-modal').classList.add('hidden');
+  toast('📋 Welcome letterhead updated.');
+};
 
 /* ============================== media ============================== */
 async function setupLocalMedia() {
