@@ -124,6 +124,7 @@
           <button id="ptt-btn" class="ctl ptt" title="Hold to talk">🔊 HOLD TO TALK</button>
           <button id="dj-btn" class="ctl hidden" title="DJ mode">🎧 DJ</button>
           <button id="jukebox-btn" class="ctl" title="Jukebox">🎵</button>
+          <button id="sfx-btn" class="ctl" title="Soundboard">🔊</button>
           <button id="sound-toggle" class="ctl" title="Join/leave sounds">🔔</button>
           <button id="gift-btn" class="ctl" title="Send gift">🎁</button>
         </div>
@@ -217,6 +218,15 @@
         <div class="row"><button id="jb-add-btn" class="btn-primary">➕ Add track</button></div>
       </div>
       <div class="row" style="margin-top:10px"><button id="jukebox-close" class="btn-ghost">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ===== SOUNDBOARD MODAL ===== -->
+  <div id="sfx-modal" class="modal hidden">
+    <div class="modal-card" style="max-width:480px">
+      <h3>🔊 Soundboard <span class="pill">everyone hears it</span></h3>
+      <div id="sfx-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0"></div>
+      <div class="row"><button id="sfx-close" class="btn-ghost">Close</button></div>
     </div>
   </div>
 

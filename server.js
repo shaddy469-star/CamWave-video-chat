@@ -1949,6 +1949,16 @@ function handleMessage(ws, raw) {
       broadcastRoom(msg.roomId, { type: 'jukebox-updated', playlists: jukeboxToObj() });
       break;
     }
+    case 'sfx': {
+      // broadcast sound effect to room (rate-limited)
+      const now = Date.now();
+      if (u.lastSfx && now - u.lastSfx < 1500)
+        return send(ws, { type: 'error', message: 'Wait a sec before another sound! 🔊' });
+      if (u.restricted || u.muted) return;
+      u.lastSfx = now;
+      broadcastRoom(u.roomId, { type: 'sfx', id: String(msg.id || '').slice(0, 20), by: u.name });
+      break;
+    }
     case 'dj': {
       // { action:'start-file'|'start-url'|'stop'|'volume', url?, volume? }
       const room = rooms.get(u.roomId);

@@ -210,6 +210,7 @@ function onServer(m) {
       S.selfMuted = false; renderUserList();
       toast('🔊 Unmuted by ' + m.by + ' — you may talk now'); break;
     case 'talk-timer': startTalkCountdown(m.limitSec); break;
+    case 'sfx': { playSfx(m.id); const fx = SFX_LIST.find(f => f.id === m.id); if (fx) toast(`${fx.icon} ${m.by} played ${fx.name}`); break; }
     case 'jukebox-updated': jbPlaylists = m.playlists || {}; if (!$('jukebox-modal').classList.contains('hidden')) renderJukebox(); break;
   case 'talk-timeout':
       setMicEnabled(false, true); toast(`⏱ Talk time limit (${m.limitSec}s) reached — mic auto-muted`); break;
@@ -2795,3 +2796,100 @@ $('jb-add-btn').onclick = () => {
   wsSend({ type: 'jukebox-add', genre: jbGenre, name, url, roomId: S.room.id });
   $('jb-name').value = ''; $('jb-url').value = '';
 };
+
+/* ============================== SOUNDBOARD ============================== */
+const SFX_LIST = [
+  { id: 'fart', icon: '💨', name: 'Fart' },
+  { id: 'airhorn', icon: '📯', name: 'Air Horn' },
+  { id: 'trombone', icon: '🎺', name: 'Sad Trombone' },
+  { id: 'rimshot', icon: '🥁', name: 'Rimshot' },
+  { id: 'boom', icon: '💥', name: 'Vine Boom' },
+  { id: 'bruh', icon: '💀', name: 'Bruh' },
+  { id: 'crickets', icon: '🦗', name: 'Crickets' },
+  { id: 'applause', icon: '👏', name: 'Applause' },
+  { id: 'record', icon: '⏪', name: 'Record Scratch' },
+  { id: 'error', icon: '⚠️', name: 'Windows Error' },
+  { id: 'notify', icon: '🔔', name: 'Notification' },
+  { id: 'laugh', icon: '😂', name: 'Evil Laugh' },
+];
+$('sfx-btn').onclick = () => {
+  const g = $('sfx-grid'); g.innerHTML = '';
+  for (const fx of SFX_LIST) {
+    const b = document.createElement('button');
+    b.className = 'btn-ghost'; b.style.cssText = 'padding:14px 6px;font-size:1.6em;display:flex;flex-direction:column;align-items:center;gap:4px';
+    b.innerHTML = `${fx.icon}<span style="font-size:.55em">${fx.name}</span>`;
+    b.onclick = () => { wsSend({ type: 'sfx', id: fx.id }); playSfx(fx.id); };
+    g.appendChild(b);
+  }
+  $('sfx-modal').classList.remove('hidden');
+};
+$('sfx-close').onclick = () => $('sfx-modal').classList.add('hidden');
+
+function playSfx(id) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t = ctx.currentTime;
+    const osc = (type, f0, f1, t0, dur, vol = .3) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t + t0);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + t0 + dur);
+      g.gain.setValueAtTime(.0001, t + t0);
+      g.gain.exponentialRampToValueAtTime(vol, t + t0 + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, t + t0 + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t + t0); o.stop(t + t0 + dur + .05);
+    };
+    const noise = (t0, dur, vol = .3, freq = 1000) => {
+      const len = ctx.sampleRate * dur, buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(vol, t + t0);
+      g.gain.exponentialRampToValueAtTime(.0001, t + t0 + dur);
+      src.connect(f); f.connect(g); g.connect(ctx.destination);
+      src.start(t + t0);
+    };
+    switch (id) {
+      case 'fart': // sputtering low osc
+        for (let i = 0; i < 8; i++) osc('sawtooth', 90 - i * 6, 60 - i * 5, i * .09, .12, .35);
+        break;
+      case 'airhorn':
+        osc('sawtooth', 392, 392, 0, .7, .4); osc('sawtooth', 415, 415, 0, .7, .3);
+        break;
+      case 'trombone': // womp womp womppp
+        osc('triangle', 220, 220, 0, .25, .35); osc('triangle', 208, 208, .3, .25, .35);
+        osc('triangle', 196, 185, .6, .6, .35);
+        break;
+      case 'rimshot': // ba dum tss
+        noise(0, .08, .4, 3000); noise(.18, .08, .4, 3000); noise(.36, .3, .25, 6000);
+        break;
+      case 'boom':
+        osc('sine', 150, 40, 0, .5, .5);
+        break;
+      case 'bruh':
+        osc('sine', 160, 90, 0, .6, .4);
+        break;
+      case 'crickets':
+        for (let i = 0; i < 6; i++) osc('sine', 4200, 4200, i * .25, .08, .12);
+        break;
+      case 'applause':
+        for (let i = 0; i < 12; i++) noise(Math.random() * .8, .1, .2, 2500 + Math.random() * 2000);
+        break;
+      case 'record':
+        osc('sawtooth', 800, 200, 0, .4, .25); noise(0, .15, .2, 4000);
+        break;
+      case 'error':
+        osc('square', 660, 660, 0, .15, .2); osc('square', 520, 520, .18, .25, .2);
+        break;
+      case 'notify':
+        osc('sine', 880, 880, 0, .12, .3); osc('sine', 1320, 1320, .14, .18, .3);
+        break;
+      case 'laugh':
+        for (let i = 0; i < 5; i++) osc('sawtooth', 300 - i * 20, 200 - i * 15, i * .16, .15, .3);
+        break;
+    }
+  } catch {}
+}
