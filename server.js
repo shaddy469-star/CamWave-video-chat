@@ -187,6 +187,7 @@ function endTrivia(roomId) {
     (winners.length ? `🎉 ${winners.join(', ')} got it!` : 'Nobody got it 😅') +
     (top ? `\n🏆 Leaders: ${top}` : '') +
     `\nType !trivia for another round.`);
+  if (winners.length) broadcastRoom(roomId, { type: 'trivia-win', winners });
 }
 function handleTriviaAnswer(roomId, user, text) {
   const st = triviaState.get(roomId);

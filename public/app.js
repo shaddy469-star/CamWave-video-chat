@@ -76,6 +76,8 @@ function onServer(m) {
       break;
     case 'trivia-board':
       S.triviaBoard = m.board; renderTriviaBoard(); break;
+    case 'trivia-win':
+      halloweenCelebration(m.winners || []); break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -402,6 +404,67 @@ function renderTriviaBoard() {
     row.innerHTML = `<span>${BOARD_MEDALS[i] || (i + 1) + '.'}</span><b>${esc(s.name)}</b><span class="champ-score">${s.score} pts</span>`;
     el.appendChild(row);
   });
+}
+
+/* ---- halloween jump-scare celebration ---- */
+function halloweenCelebration(winners) {
+  const ov = document.createElement('div');
+  ov.id = 'spooky-overlay';
+  const pop = document.createElement('div');
+  pop.className = 'spooky-pop';
+  pop.textContent = '👻';
+  const txt = document.createElement('div');
+  txt.className = 'spooky-text';
+  txt.textContent = `🎃 ${winners.join(', ')} got it! 🎃`;
+  ov.appendChild(pop); ov.appendChild(txt);
+  const emojis = ['🎃', '👻', '🦇', '🍬', '🕷️', '💀', '🕸️'];
+  for (let i = 0; i < 28; i++) {
+    const s = document.createElement('span');
+    s.className = 'spooky-fall';
+    s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    s.style.left = (Math.random() * 100) + 'vw';
+    s.style.animationDelay = (Math.random() * 1.6) + 's';
+    s.style.fontSize = (1.4 + Math.random() * 2.2) + 'em';
+    ov.appendChild(s);
+  }
+  document.body.appendChild(ov);
+  playSpookySting();
+  const kill = () => { if (ov.parentNode) ov.remove(); };
+  ov.onclick = kill;
+  setTimeout(kill, 5200);
+}
+function playSpookySting() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    if (ctx.resume) ctx.resume();
+    const t = ctx.currentTime;
+    // dissonant descending scare chord
+    [[587, 0], [622, 0.02]].forEach(([f, dt]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t + dt);
+      o.frequency.exponentialRampToValueAtTime(110, t + dt + 0.9);
+      g.gain.setValueAtTime(0.0001, t + dt);
+      g.gain.exponentialRampToValueAtTime(0.22, t + dt + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 1.2);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t + dt); o.stop(t + dt + 1.3);
+    });
+    // warbly ghost wail
+    const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    const lfo = ctx.createOscillator(), lg = ctx.createGain();
+    o2.type = 'triangle'; o2.frequency.value = 880;
+    lfo.type = 'sine'; lfo.frequency.value = 11; lg.gain.value = 220;
+    lfo.connect(lg); lg.connect(o2.frequency);
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(0.1, t + 0.12);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    o2.connect(g2); g2.connect(ctx.destination);
+    o2.start(t); lfo.start(t); o2.stop(t + 1.2); lfo.stop(t + 1.2);
+    setTimeout(() => { try { ctx.close(); } catch {} }, 2500);
+  } catch {}
 }
 /* ---- private cam invites ---- */
 let pendingInvite = null;
