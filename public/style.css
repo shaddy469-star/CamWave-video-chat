@@ -795,3 +795,78 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .popup button { display: block; width: 100%; text-align: left; background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px 10px; margin: 4px 0; cursor: pointer; }
 .popup button:hover { border-color: var(--accent1); }
 .popup button.danger { color: var(--bad); }
+
+/* ==================== mobile: phones (max 640px) ==================== */
+@media (max-width: 640px) {
+  html, body { overflow-x: hidden; }
+  img, video { max-width: 100%; }
+
+  .view { padding: 12px; }
+
+  /* topbar: compact, wraps instead of overflowing */
+  #topbar { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+  .brand { font-size: 1.05em; gap: 8px; }
+  .brand img { width: 26px; height: 26px; }
+  .me { gap: 6px; flex-wrap: wrap; }
+  #status-select { max-width: 104px; font-size: .85em; }
+  #contacts-btn { padding: 6px 10px; font-size: .9em; }
+  .coin-pill { font-size: .78em; padding: 3px 8px; }
+
+  /* lobby: 2-column cards, TikTok style */
+  .lobby-controls { flex-wrap: wrap; }
+  .room-list { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .room-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .room-section h2 { font-size: .95em; }
+
+  /* room header */
+  .room-topbar { gap: 8px; margin-bottom: 10px; }
+  .room-topbar h2 { font-size: 1.1em; min-width: 0; }
+
+  /* video: 2-up grid */
+  .video-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .spotlight video { max-height: 38vh; }
+
+  /* controls: thumb-friendly */
+  .media-controls { gap: 8px; margin-top: 10px; }
+  .ctl { padding: 12px 14px; font-size: .95em; min-height: 48px; }
+
+  /* side panels stack full-width */
+  .panel { padding: 10px; margin-bottom: 10px; }
+  .user-list { max-height: 200px; }
+  .user-row { font-size: .88em; padding: 8px; }
+
+  /* chat */
+  .chat-log { height: 220px; }
+  .chat-input-row { gap: 6px; }
+  .chat-input-row .btn-ghost { padding: 10px; }
+  #chat-input { font-size: 16px; } /* stops iOS zoom-on-focus */
+
+  /* login inputs: stop iOS zoom */
+  #nick-input, #ownerpass-input, #age-input { font-size: 16px; }
+
+  /* modals + popups fit */
+  .modal { padding: 12px; align-items: flex-end; }
+  .modal-card { padding: 16px; width: 100%; border-radius: 16px 16px 0 0; max-height: 92vh; }
+  .popup { max-width: 94vw; }
+
+  /* drawer full-width */
+  .drawer { width: 100vw; max-width: 100vw; }
+
+  /* gift shop */
+  .gift-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .gift-item { padding: 8px 4px; }
+  .gift-item .ge { font-size: 1.6em; }
+
+  /* coin packages */
+  .coin-pack { padding: 12px 10px; gap: 8px; }
+
+  /* tables scroll instead of breaking layout */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* long words / names don't blow out rows */
+  .chat-msg, .user-row .nm, .ban-row .nm { overflow-wrap: anywhere; }
+
+  /* bottom nav fits */
+  .nav-btn { padding: 4px 10px; font-size: 1.3em; }
+  .nav-create { padding: 6px 14px !important; }
+}
