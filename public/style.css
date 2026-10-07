@@ -454,14 +454,7 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
 .spy-section h2 { color: var(--accent1); }
 .spy-section .fineprint { font-size: .72em; color: var(--muted); font-weight: 400; }
 
-/* ---------- recording notice + spy record button ---------- */
-#recording-notice {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 8px 14px; margin-bottom: 10px;
-  background: rgba(255, 0, 0, .14); border: 1px solid #f00; border-radius: 10px;
-  color: #ff6b6b; font-weight: 700;
-  animation: rec-blink 1.2s ease-in-out infinite;
-}
+/* ---------- spy record button ---------- */
 @keyframes rec-blink { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
 #spy-record-btn.recording { border-color: #f00; color: #ff6b6b; animation: rec-blink 1.2s ease-in-out infinite; }
 

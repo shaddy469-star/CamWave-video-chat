@@ -1300,15 +1300,6 @@ function handleMessage(ws, raw) {
       send(ws, { type: 'spy-left' });
       break;
     }
-    case 'spy-record': {
-      // site owner recording a private session — participants are notified (recording notice)
-      if (!u.siteOwner) return send(ws, { type: 'error', message: 'Only the site owner can do that.' });
-      const room = rooms.get(msg.roomId);
-      if (!room || !room.private) return send(ws, { type: 'error', message: 'Not a private room.' });
-      if (u.spectating !== room.id) return send(ws, { type: 'error', message: 'You are not watching that room.' });
-      broadcastRoom(room.id, { type: 'recording-notice', recording: !!msg.recording });
-      break;
-    }
 
     case 'like': {
       if (!u.roomId) break;
