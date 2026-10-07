@@ -953,15 +953,19 @@ function openGiftShop(toId) {
   const sel = $('gift-to');
   sel.innerHTML = '';
   const users = [...S.roomUsers.values()].filter(u => u.id !== S.myId);
-  if (!users.length) { toast('No one else in the room to gift.'); return; }
   for (const u of users) {
     const o = document.createElement('option');
     o.value = u.id; o.textContent = u.name;
     if (u.id === giftToId) o.selected = true;
     sel.appendChild(o);
   }
-  giftToId = sel.value;
-  sel.onchange = () => { giftToId = sel.value; };
+  if (!users.length) {
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = 'No one else here yet — gifts need a recipient';
+    sel.appendChild(o);
+  }
+  giftToId = sel.value || null;
+  sel.onchange = () => { giftToId = sel.value || null; };
   const grid = $('gift-grid');
   grid.innerHTML = '';
   for (const g of (S.gifts || [])) {
@@ -969,6 +973,7 @@ function openGiftShop(toId) {
     b.className = 'gift-item' + ((S.coins || 0) < g.cost ? ' poor' : '');
     b.innerHTML = `<span class="ge">${g.emoji}</span><span class="gn">${esc(g.name)}</span><span class="gc">🪙${g.cost}</span>`;
     b.onclick = () => {
+      if (!giftToId) { toast('Wait for someone to join, then send them a gift! 🎁'); return; }
       if ((S.coins || 0) < g.cost) { toast(`Not enough coins for ${g.name} 🪙`); return; }
       wsSend({ type: 'send-gift', to: giftToId, giftId: g.id });
       $('gift-modal').classList.add('hidden');
@@ -1001,6 +1006,7 @@ function tickerAddGift(m) {
   tape.style.animation = 'none'; void tape.offsetWidth; tape.style.animation = '';
 }
 $('gift-lb-btn').onclick = () => openGiftLeaderboard();
+$('gift-btn').onclick = () => openGiftShop();
 $('visitors-btn').onclick = () => openRoomVisitors();
 $('modpanel-btn').onclick = () => openModPanel();
 $('modpanel-close').onclick = () => $('modpanel-modal').classList.add('hidden');
