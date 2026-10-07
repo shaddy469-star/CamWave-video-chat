@@ -49,6 +49,7 @@ function onServer(m) {
       $('my-name').textContent = m.name;
       $('siteowner-btn').classList.toggle('hidden', !S.siteOwner);
       if (m.siteBanner) { S.siteBanner = m.siteBanner; showLetterhead(m.siteBanner); }
+      if (m.triviaBoard) { S.triviaBoard = m.triviaBoard; renderTriviaBoard(); }
       if (pendingPhoto) { S.myPhoto = pendingPhoto; wsSend({ type: 'set-photo', dataUrl: pendingPhoto }); pendingPhoto = null; }
       wsSend({ type: 'get-contacts' });
       break;
@@ -73,6 +74,8 @@ function onServer(m) {
       $('invite-text').textContent = `${m.fromName} invited you to a private video chat.`;
       $('invite-modal').classList.remove('hidden');
       break;
+    case 'trivia-board':
+      S.triviaBoard = m.board; renderTriviaBoard(); break;
     case 'error':
       if ($('login-screen').classList.contains('hidden')) toast(m.message);
       else { $('login-error').textContent = m.message; }
@@ -386,6 +389,20 @@ function sendWarn(reason) {
 $('warn-send').onclick = () => sendWarn($('warn-custom').value.trim());
 $('warn-close').onclick = () => $('warn-modal').classList.add('hidden');
 
+/* ---- trivia champions board ---- */
+const BOARD_MEDALS = ['🥇', '🥈', '🥉', '4.', '5.'];
+function renderTriviaBoard() {
+  const el = $('trivia-board'); if (!el) return;
+  el.innerHTML = '';
+  const board = (S.triviaBoard || []).slice(0, 5);
+  if (!board.length) { el.innerHTML = '<p class="fineprint">No champions yet — type !trivia to play!</p>'; return; }
+  board.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'champ-row' + (i === 0 ? ' champ-top' : '');
+    row.innerHTML = `<span>${BOARD_MEDALS[i] || (i + 1) + '.'}</span><b>${esc(s.name)}</b><span class="champ-score">${s.score} pts</span>`;
+    el.appendChild(row);
+  });
+}
 /* ---- private cam invites ---- */
 let pendingInvite = null;
 $('invite-accept').onclick = () => {

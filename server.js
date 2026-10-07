@@ -101,7 +101,7 @@ function persistBanner() {
 }
 
 /* ============================== bots ==============================
-   TriviaBot: interactive trivia (!trivia, !score)
+   TriviaBot: interactive trivia (!trivia, !score, !top)
    HypeBot: fresh content (!trending, !joke, !fact, !bots) */
 const BOT_TRIVIA = '🎲 TriviaBot';
 const BOT_HYPE = '🔥 HypeBot';
@@ -177,6 +177,7 @@ function endTrivia(roomId) {
       const s = st.scores.get(uid) || { name: nm, score: 0 };
       s.score++; s.name = nm;
       st.scores.set(uid, s);
+      recordTriviaWin(nm);
     }
   }
   const top = [...st.scores.values()].sort((a, b) => b.score - a.score).slice(0, 3)
@@ -252,10 +253,45 @@ function handleBotCommand(u, text) {
     case 'joke': hypeJoke(roomId); return true;
     case 'fact': hypeFact(roomId); return true;
     case 'bots':
-      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — trivia leaderboard\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact');
+      botSay(roomId, BOT_HYPE, '🤖 Bot commands:\n!trivia — start a trivia round\n!score — room leaderboard\n!top — all-time champions\n!trending — what\'s hot online\n!joke — dad joke\n!fact — random fact');
       return true;
+    case 'top': {
+      const top = triviaBoard();
+      botSay(roomId, BOT_TRIVIA, top.length
+        ? '🏆 All-time trivia champions:\n' + top.map((s, i) => `${i + 1}. ${s.name} — ${s.score}`).join('\n')
+        : 'No champions yet. Type !trivia to play!');
+      return true;
+    }
   }
   return false;
+}
+
+// ---- global trivia scoreboard (all-time, persistent) ----
+const gTriviaScores = new Map(); // lowerName -> {name, score}
+async function loadTriviaScores() {
+  if (!persistOn) return;
+  try {
+    const raw = await upstash('HGETALL', 'camwave:triviascores');
+    let entries = {};
+    if (Array.isArray(raw)) { for (let i = 0; i + 1 < raw.length; i += 2) entries[raw[i]] = raw[i + 1]; }
+    else if (raw && typeof raw === 'object') entries = raw;
+    for (const [k, v] of Object.entries(entries)) {
+      try { const r = JSON.parse(v); if (r && r.name) gTriviaScores.set(k, r); } catch {}
+    }
+    console.log(`trivia scores: loaded ${gTriviaScores.size} players`);
+  } catch (e) { console.warn('trivia scores load:', e.message); }
+}
+function triviaBoard() {
+  return [...gTriviaScores.values()].sort((a, b) => b.score - a.score).slice(0, 10)
+    .map(s => ({ name: s.name, score: s.score }));
+}
+function recordTriviaWin(name) {
+  const lname = name.toLowerCase();
+  const g = gTriviaScores.get(lname) || { name, score: 0 };
+  g.score++; g.name = name;
+  gTriviaScores.set(lname, g);
+  persistWrite(upstash('HSET', 'camwave:triviascores', lname, JSON.stringify(g)));
+  broadcastAll({ type: 'trivia-board', board: triviaBoard() });
 }
 
 // ---- ambient bots: keep rooms lively on their own ----
@@ -625,7 +661,7 @@ function handleMessage(ws, raw) {
       ws._user = user;
       users.set(id, user);
       nameToId.set(name.toLowerCase(), id);
-      send(ws, { type: 'welcome', id, name, gender, age, siteOwner: user.siteOwner, siteBanner });
+      send(ws, { type: 'welcome', id, name, gender, age, siteOwner: user.siteOwner, siteBanner, triviaBoard: triviaBoard() });
       // Seed a default room so the directory is never empty.
       // System-owned until someone joins, then the first joiner owns it.
       if (rooms.size === 0) makeRoom('Lobby', null);
@@ -1013,4 +1049,5 @@ server.listen(PORT, () => {
   console.log(`CamWave listening on port ${PORT}`);
   loadPersistedBans();
   loadSiteBanner();
+  loadTriviaScores();
 });

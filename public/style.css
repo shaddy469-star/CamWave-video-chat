@@ -206,6 +206,13 @@ body {
 .chat-msg.bot { background: rgba(0,0,0,.25); border-left: 3px solid var(--accent2); }
 .chat-msg.bot > div { white-space: pre-line; }
 .chat-msg.bot .who { color: var(--accent2); font-weight: 700; }
+
+/* trivia champions board */
+.trivia-board { display: flex; flex-direction: column; gap: 4px; }
+.champ-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(0,0,0,.2); }
+.champ-row b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.champ-row.champ-top { border: 1px solid var(--accent); }
+.champ-score { color: var(--accent3); font-weight: 700; white-space: nowrap; }
 .activity-log { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
 .activity-row { font-size: .82em; color: var(--muted); padding: 3px 8px; background: var(--bg2); border-radius: 7px; }
 .activity-row b { color: var(--text); }
