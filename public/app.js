@@ -549,6 +549,31 @@ function playRizzSound(kind) {
       case 'smooth': // jazzy major-7th lift
         [261.63, 329.63, 392.0, 493.88].forEach((f, i) => tone('triangle', f, f, i * 0.09, 0.7, 0.11));
         break;
+      case 'womp': { // sad trombone — the diss sting
+        const notes = [[196.0, 0, 0.28], [185.0, 0.28, 0.28], [174.61, 0.56, 0.28], [164.81, 0.84, 0.7]];
+        notes.forEach(([f, t0, dur]) => {
+          const o = ctx.createOscillator(), g = ctx.createGain(), v = ctx.createOscillator(), vg = ctx.createGain();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(f, t + t0);
+          o.frequency.linearRampToValueAtTime(f * 0.94, t + t0 + dur);
+          v.frequency.value = 5.5; vg.gain.value = 6;
+          v.connect(vg); vg.connect(o.frequency);
+          g.gain.setValueAtTime(0.0001, t + t0);
+          g.gain.exponentialRampToValueAtTime(0.16, t + t0 + 0.04);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + t0 + dur);
+          o.connect(g); g.connect(out);
+          o.start(t + t0); v.start(t + t0);
+          o.stop(t + t0 + dur + 0.05); v.stop(t + t0 + dur + 0.05);
+        });
+        break;
+      }
+      case 'buzz': // robot error buzz
+        tone('square', 120, 90, 0, 0.7, 0.14);
+        tone('square', 90, 70, 0, 0.7, 0.1);
+        break;
+      case 'laser': // robot zap
+        tone('sawtooth', 2200, 120, 0, 0.32, 0.12);
+        break;
       default:
         [466, 471, 461].forEach(f => tone('sawtooth', f, f, 0, 1.0, 0.1));
     }
