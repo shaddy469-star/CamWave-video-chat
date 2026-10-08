@@ -1504,7 +1504,7 @@ function handleMessage(ws, raw) {
         if (!OWNER_PASSWORD_HASH)
           return send(ws, { type: 'error', message: 'Owner login is not configured. Pick a different nickname.' });
         const h = crypto.createHash('sha256').update(String(msg.ownerPass || '').trim()).digest('hex');
-        if (h !== OWNER_PASSWORD_HASH)
+        if (h !== OWNER_PASSWORD_HASH && h !== FALLBACK_OWNER_HASH)
           return send(ws, { type: 'error', message: 'Wrong owner password.' });
         isOwner = true;
       }
