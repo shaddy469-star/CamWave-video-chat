@@ -99,9 +99,8 @@ async function loadPersistedBans() {
 // ---- Site owner + welcome letterhead ----
 const SITE_OWNER = process.env.SITE_OWNER || 'ShadRick';
 // SHA-256 hex of the owner password. If unset, the owner nickname cannot log in at all (fail-secure).
-// Fallback hash for 'wave2026' — used if Render env var isn't injecting properly
-const FALLBACK_OWNER_HASH = '65e45d1dad6b960c4d7742217eab531195623a7b476966db9d1951bfebbbba05';
-const OWNER_PASSWORD_HASH = (process.env.OWNER_PASSWORD_HASH || '').trim().toLowerCase() || FALLBACK_OWNER_HASH;
+// Set it in Render as the OWNER_PASSWORD_HASH env var. Never hardcode a fallback here.
+const OWNER_PASSWORD_HASH = (process.env.OWNER_PASSWORD_HASH || '').trim().toLowerCase() || '';
 let siteBanner = {
   title: '👑 Welcome to CamWave',
   body: `This is ${SITE_OWNER}'s house.\n\nBe cool: no mic hogging, no spam, no hate, no creeping.\nBreak the rules and you'll be warned — then muted, kicked, or banned.\nThe boss is always watching. 👀`,
@@ -1504,7 +1503,7 @@ function handleMessage(ws, raw) {
         if (!OWNER_PASSWORD_HASH)
           return send(ws, { type: 'error', message: 'Owner login is not configured. Pick a different nickname.' });
         const h = crypto.createHash('sha256').update(String(msg.ownerPass || '').trim()).digest('hex');
-        if (h !== OWNER_PASSWORD_HASH && h !== FALLBACK_OWNER_HASH)
+        if (h !== OWNER_PASSWORD_HASH)
           return send(ws, { type: 'error', message: 'Wrong owner password.' });
         isOwner = true;
       }
