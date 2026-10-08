@@ -99,7 +99,7 @@ async function loadPersistedBans() {
 // ---- Site owner + welcome letterhead ----
 const SITE_OWNER = process.env.SITE_OWNER || 'ShadRick';
 // SHA-256 hex of the owner password. If unset, the owner nickname cannot log in at all (fail-secure).
-const OWNER_PASSWORD_HASH = process.env.OWNER_PASSWORD_HASH || '';
+const OWNER_PASSWORD_HASH = (process.env.OWNER_PASSWORD_HASH || '').trim().toLowerCase();
 let siteBanner = {
   title: '👑 Welcome to CamWave',
   body: `This is ${SITE_OWNER}'s house.\n\nBe cool: no mic hogging, no spam, no hate, no creeping.\nBreak the rules and you'll be warned — then muted, kicked, or banned.\nThe boss is always watching. 👀`,
@@ -1501,7 +1501,7 @@ function handleMessage(ws, raw) {
       if (name === SITE_OWNER) {
         if (!OWNER_PASSWORD_HASH)
           return send(ws, { type: 'error', message: 'Owner login is not configured. Pick a different nickname.' });
-        const h = crypto.createHash('sha256').update(String(msg.ownerPass || '')).digest('hex');
+        const h = crypto.createHash('sha256').update(String(msg.ownerPass || '').trim()).digest('hex');
         if (h !== OWNER_PASSWORD_HASH)
           return send(ws, { type: 'error', message: 'Wrong owner password.' });
         isOwner = true;
