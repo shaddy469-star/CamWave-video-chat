@@ -1488,10 +1488,9 @@ function handleMessage(ws, raw) {
   switch (msg.type) {
 
     case 'hello': {
+      if (ws._user) return; // already logged in on this socket
       const name = sanitizeName(msg.name);
       if (!name) return send(ws, { type: 'error', message: 'Pick a nickname (2-24 chars, letters/numbers/spaces).' });
-      if (nameToId.has(name.toLowerCase()))
-        return send(ws, { type: 'error', message: 'That nickname is taken. Try another.' });
       const id = 'u' + (nextUserId++);
       const gender = msg.gender === 'f' ? 'f' : 'm';
       const age = parseInt(msg.age, 10);
@@ -1506,6 +1505,20 @@ function handleMessage(ws, raw) {
         if (h !== OWNER_PASSWORD_HASH)
           return send(ws, { type: 'error', message: 'Wrong owner password.' });
         isOwner = true;
+      }
+      // Session takeover: a reconnect kicks its own stale session instead of
+      // being rejected as "nickname taken". The owner name stays
+      // password-protected, so only the real owner can take it over.
+      const lower = name.toLowerCase();
+      const existingId = nameToId.get(lower);
+      if (existingId) {
+        const oldU = users.get(existingId);
+        if (oldU && oldU.ws && oldU.ws !== ws) {
+          dropConnection(oldU.ws, 'replaced');
+          send(ws, { type: 'notice', text: '🔄 Reconnected — closed your old session.' });
+        } else {
+          nameToId.delete(lower); // stale mapping with no live socket
+        }
       }
       const user = { id, name, gender, age, ip: ws._ip, ws, status: 'online', roomId: null,
                      contacts: new Set(), muted: false, micLive: false, videoOn: false, talking: false, talkTimer: null,
@@ -2141,7 +2154,7 @@ function joinRoom(u, roomId) {
     room.ownerId = u.id;
     send(u.ws, { type: 'notice', text: `You are now the owner of "${room.name}".` });
   }
-   // No auto-mute on entry: mutes come only from mods/owner, the talk timer, DJ mode, or mute-all.
+  // No auto-mute on entry: mutes come only from mods/owner, the talk timer, DJ mode, or mute-all.
   // (doLeaveRoom already cleared u.muted, and fresh users start unmuted.)
   if (u.siteOwner) u.muted = false; // owner NEVER muted
   else if (room.dj && room.dj.active && rankOf(room, u.id) < 1) {
@@ -2186,6 +2199,52 @@ function contactList(u) {
 /* WebSocket lifecycle                                                 */
 /* ------------------------------------------------------------------ */
 
+// Drop a connection immediately: runs the same cleanup as the 'close'
+// handler, synchronously, and neuters ws._user so a late 'close' event
+// can't clobber a new session that reuses the nickname.
+function dropConnection(ws, reason) {
+  const u = ws._user;
+  if (!u) return;
+  ws._user = null;
+  clearTalkTimer(u);
+  clearCamCheck(u);
+  // spectator cleanup: tell the watched room the invisible viewer is gone
+  if (u.spectating) {
+    broadcastRoom(u.spectating, { type: 'spectator-left', id: u.id });
+    u.spectating = null;
+  }
+  const roomId = u.roomId;
+  if (roomId) {
+    u.roomId = null; // avoid double-broadcast inside doLeaveRoom ordering
+    const room = rooms.get(roomId);
+    users.delete(u.id);
+    nameToId.delete(u.name.toLowerCase());
+    if (room) {
+      broadcastRoom(roomId, { type: 'user-left', id: u.id, name: u.name, reason: reason || 'disconnect' });
+      pushRoomList();
+      if (room.ownerId === u.id) {
+        const members = roomUsers(roomId);
+        const pick = members.find(m => room.admins.has(m.id)) ||
+                     members.find(m => room.mods.has(m.id)) || members[0];
+        if (pick) {
+          room.ownerId = pick.id;
+          room.admins.delete(pick.id); room.mods.delete(pick.id);
+          broadcastRoom(roomId, { type: 'room-roles', users: roomUsers(roomId) });
+          sendToUser(pick.id, { type: 'notice', text: 'You are now the room owner.' });
+        }
+      }
+      if (roomUsers(roomId).length === 0 && !room.permanent) {
+        rooms.delete(roomId);
+        pushRoomList();
+      }
+    }
+  } else {
+    users.delete(u.id);
+    nameToId.delete(u.name.toLowerCase());
+  }
+  try { ws.terminate(); } catch {}
+}
+
 wss.on('connection', (ws, req) => {
   ws._ip = clientIp(req);
   ws.isAlive = true;
@@ -2193,46 +2252,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('message', (raw) => handleMessage(ws, raw));
 
-  ws.on('close', () => {
-    const u = ws._user;
-    if (!u) return;
-    clearTalkTimer(u);
-    clearCamCheck(u);
-    // spectator cleanup: tell the watched room the invisible viewer is gone
-    if (u.spectating) {
-      broadcastRoom(u.spectating, { type: 'spectator-left', id: u.id });
-      u.spectating = null;
-    }
-    const roomId = u.roomId;
-    if (roomId) {
-      u.roomId = null; // avoid double-broadcast inside doLeaveRoom ordering
-      const room = rooms.get(roomId);
-      users.delete(u.id);
-      nameToId.delete(u.name.toLowerCase());
-      if (room) {
-        broadcastRoom(roomId, { type: 'user-left', id: u.id, name: u.name, reason: 'disconnect' });
-        pushRoomList();
-        if (room.ownerId === u.id) {
-          const members = roomUsers(roomId);
-          const pick = members.find(m => room.admins.has(m.id)) ||
-                       members.find(m => room.mods.has(m.id)) || members[0];
-          if (pick) {
-            room.ownerId = pick.id;
-            room.admins.delete(pick.id); room.mods.delete(pick.id);
-            broadcastRoom(roomId, { type: 'room-roles', users: roomUsers(roomId) });
-            sendToUser(pick.id, { type: 'notice', text: 'You are now the room owner.' });
-          }
-        }
-        if (roomUsers(roomId).length === 0 && !room.permanent) {
-          rooms.delete(roomId);
-          pushRoomList();
-        }
-      }
-    } else {
-      users.delete(u.id);
-      nameToId.delete(u.name.toLowerCase());
-    }
-  });
+  ws.on('close', () => dropConnection(ws, 'disconnect'));
 
   ws.on('error', () => {});
 });
