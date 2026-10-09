@@ -2141,7 +2141,12 @@ function joinRoom(u, roomId) {
     room.ownerId = u.id;
     send(u.ws, { type: 'notice', text: `You are now the owner of "${room.name}".` });
   }
-  u.muted = u.siteOwner ? false : !room.settings.openMic; // owner NEVER muted
+   // No auto-mute on entry: mutes come only from mods/owner, the talk timer, DJ mode, or mute-all.
+  // (doLeaveRoom already cleared u.muted, and fresh users start unmuted.)
+  if (u.siteOwner) u.muted = false; // owner NEVER muted
+  else if (room.dj && room.dj.active && rankOf(room, u.id) < 1) {
+    u.muted = true; u.talking = false; u.micLive = false; // joined mid-DJ-set: stay muted like everyone else
+  }
   u.restricted = restrictedUsers.has(u.name.toLowerCase());
   u.videoOn = false;
   u.talking = false;
