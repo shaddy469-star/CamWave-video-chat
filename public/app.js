@@ -183,7 +183,7 @@ function onServer(m) {
     case 'user-media': setUserProp(m.id, 'videoOn', m.videoOn); break;
     case 'user-talking': setUserProp(m.id, 'talking', m.talking); if (typeof m.micLive === 'boolean') setUserProp(m.id, 'micLive', m.micLive); renderUserList(); updateTileStates(); break;
     case 'user-muted': setUserProp(m.id, 'muted', true); renderUserList(); break;
-    case 'user-unmuted': setUserProp(m.id, 'muted', false); renderUserList(); break;
+    case 'user-unmuted': setUserProp(m.id, 'muted', false); if (m.id === S.myId) S.selfMuted = false; renderUserList(); break;
     case 'user-unrestricted': setUserProp(m.id, 'restricted', false); renderUserList(); break;
     case 'room-roles':
       for (const u of m.users) setUserProp(u.id, 'role', u.role);
@@ -1799,6 +1799,7 @@ $('siteowner-btn').onclick = () => {
   const b = S.siteBanner || {};
   $('sb-title').value = b.title || '';
   $('sb-body').value = b.body || '';
+    
   $('sb-contact').value = b.contact || '';
   $('sitebanner-modal').classList.remove('hidden');
 };
@@ -1816,9 +1817,9 @@ async function setupLocalMedia() {
   try {
     S.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     S.camOn = true; S.micOn = false;
-    // start muted in PTT rooms
+    // mic starts OFF in PTT rooms (hold to talk); never touch S.selfMuted here —
+    // that's the server's mute flag, and setting it locally deadlocks the mic button.
     S.localStream.getAudioTracks().forEach(t => t.enabled = false);
-    S.selfMuted = true;
     wsSend({ type: 'media-state', videoOn: true });
   } catch (e) {
     console.warn('No local media (watch-only mode):', e.message);
