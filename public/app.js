@@ -450,6 +450,8 @@ function onRoomJoined(m) {
   const rdj = m.room && m.room.dj;
   if (rdj && rdj.active && rdj.mode === 'spotify' && rdj.spotifyId) {
     startDjSpotify(rdj.spotifyType, rdj.spotifyId, rdj.by); // late joiner tunes in
+  } else if (rdj && rdj.active && rdj.mode === 'youtube' && rdj.youtubeId) {
+    startDjYoutube(rdj.youtubeId, rdj.by); // late joiner tunes in
   }
   renderGiftGoal(m.giftGoal || null);
   $('view-lobby').classList.add('hidden');
@@ -2502,11 +2504,17 @@ function onDjMsg(m) {
   } else if (m.action === 'start-spotify') {
     startDjSpotify(m.spotifyType, m.spotifyId, m.by);
     addSysMsg(`🎧 ${m.by} started DJing Spotify — tap play on the card to tune in.`);
+  } else if (m.action === 'start-youtube') {
+    startDjYoutube(m.youtubeId, m.by);
+    addSysMsg(`🎧 ${m.by} started DJing YouTube — tap play on the card to tune in.`);
   } else if (m.action === 'stop') {
     stopDjLocal();
     addSysMsg('🎧 DJ stopped.');
   } else if (m.action === 'volume') {
     if (S.dj.audio) S.dj.audio.volume = m.volume;
+    if (S.dj.mode === 'youtube' && ytPlayer && ytPlayer.setVolume) {
+      try { ytPlayer.setVolume(Math.round(m.volume * 100)); } catch {}
+    }
   }
   renderRoomHeader();
 }
@@ -2575,6 +2583,58 @@ function hideSpotifyCard() {
   const card = $('spotify-dj-card');
   if (card) { card.classList.add('hidden'); const w = $('spotify-dj-embed'); if (w) w.innerHTML = ''; }
 }
+/* ---- YouTube DJ: owner picks the video, everyone tunes in ----
+   Uses YouTube's IFrame Player API so the owner changing videos keeps
+   playing on listeners' phones without another tap (first play needs
+   one tap due to browser autoplay rules). */
+let ytPlayer = null;
+function parseYoutubeLink(input) {
+  const s = String(input || '').trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s; // bare video ID
+  const m = s.match(/(?:youtube\.com\/(?:watch\?[^#]*v=|shorts\/|embed\/|live\/)|youtu\.be\/|music\.youtube\.com\/watch\?[^#]*v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/i);
+  return m ? m[1] : null;
+}
+function ensureYtApi(cb) {
+  if (window.YT && YT.Player) { cb(); return; }
+  if (!ensureYtApi.loading) {
+    ensureYtApi.loading = true;
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    const first = document.getElementsByTagName('script')[0];
+    first.parentNode.insertBefore(tag, first);
+  }
+  const iv = setInterval(() => {
+    if (window.YT && YT.Player) { clearInterval(iv); cb(); }
+  }, 300);
+  setTimeout(() => clearInterval(iv), 10000);
+}
+function startDjYoutube(youtubeId, by) {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(youtubeId || '')) return;
+  stopDjLocal();
+  $('youtube-dj-by').textContent = by || 'Someone';
+  $('youtube-dj-card').classList.remove('hidden');
+  S.dj = { active: true, mode: 'youtube', audio: null, url: null, track: null, stream: null,
+           youtubeId, by };
+  ensureYtApi(() => {
+    if (!S.dj.active || S.dj.mode !== 'youtube') return; // stopped while the API loaded
+    try {
+      if (!ytPlayer) {
+        ytPlayer = new YT.Player('youtube-dj-embed', {
+          width: '100%', height: '230', videoId: youtubeId,
+          playerVars: { rel: 0, autoplay: 1, origin: window.location.origin },
+        });
+      } else {
+        ytPlayer.loadVideoById(youtubeId);
+      }
+    } catch (e) { /* player will show when ready */ }
+  });
+  toast('🎧 Tap play on the YouTube card to tune in.');
+}
+function hideYoutubeCard() {
+  const card = $('youtube-dj-card');
+  if (card) card.classList.add('hidden');
+  try { if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo(); } catch {}
+}
 async function djPlayTab() {
   // Share another browser tab's audio (Spotify web player, YouTube, …) with the room.
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia)
@@ -2616,6 +2676,7 @@ async function djPlayTab() {
 }
 function stopDjLocal() {
   hideSpotifyCard();
+  hideYoutubeCard();
   if (S.dj.audio) { try { S.dj.audio.pause(); } catch {} }
   if (S.dj.track) {
     for (const [, p] of S.peers) {
@@ -2636,6 +2697,14 @@ $('dj-play-spotify').onclick = () => {
   $('dj-modal').classList.add('hidden');
 };
 $('spotify-dj-hide').onclick = () => $('spotify-dj-card').classList.add('hidden'); // minimize for me only
+$('dj-play-youtube').onclick = () => {
+  const yid = parseYoutubeLink($('dj-youtube').value);
+  if (!yid) return toast('Paste a YouTube video link.');
+  startDjYoutube(yid, S.myName);
+  wsSend({ type: 'dj', action: 'start-youtube', youtubeId: yid });
+  $('dj-modal').classList.add('hidden');
+};
+$('youtube-dj-hide').onclick = () => hideYoutubeCard(); // minimize for me only (stops my playback)
 $('dj-play-url').onclick = () => {
   const url = $('dj-url').value.trim();
   if (!/^https?:\/\//i.test(url)) return toast('Paste a valid http(s) audio URL.');
