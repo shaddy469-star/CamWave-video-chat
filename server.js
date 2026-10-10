@@ -2005,7 +2005,7 @@ function handleMessage(ws, raw) {
     }
     case 'dj': {
       // DJ mode: mute everyone except staff so nobody talks over the music
-      if ((msg.action === 'start-url' || msg.action === 'start-file' || msg.action === 'start-tab' || msg.action === 'start-spotify') && u.siteOwner) {
+      if ((msg.action === 'start-url' || msg.action === 'start-file' || msg.action === 'start-tab' || msg.action === 'start-spotify' || msg.action === 'start-youtube') && u.siteOwner) {
         for (const m of roomUsers(u.roomId)) {
           if (m.id === u.id || m.siteOwner || rankOf(rooms.get(u.roomId), m.id) >= 1) continue;
           if (!m.muted) {
@@ -2055,6 +2055,14 @@ function handleMessage(ws, raw) {
           return send(ws, { type: 'error', message: 'That Spotify link did not parse.' });
         room.dj = { active: true, mode: 'spotify', spotifyType, spotifyId, volume: 1, by: u.name };
         broadcastRoom(room.id, { type: 'dj', action: 'start-spotify', spotifyType, spotifyId, by: u.name });
+      } else if (msg.action === 'start-youtube') {
+        // Owner DJs a YouTube video: every client loads it in the YouTube
+        // player. Owner picks and can change/stop it; listeners just tune in.
+        const youtubeId = String(msg.youtubeId || '');
+        if (!/^[A-Za-z0-9_-]{11}$/.test(youtubeId))
+          return send(ws, { type: 'error', message: 'That YouTube link did not parse.' });
+        room.dj = { active: true, mode: 'youtube', youtubeId, volume: 1, by: u.name };
+        broadcastRoom(room.id, { type: 'dj', action: 'start-youtube', youtubeId, by: u.name });
       } else if (msg.action === 'volume') {
         const v = Math.max(0, Math.min(1, Number(msg.volume)));
         room.dj.volume = v;
