@@ -274,17 +274,27 @@
       <h3>🎧 DJ mode <span class="pill">you control the room's ears</span></h3>
       <div class="row"><input type="file" id="dj-file" accept="audio/*"></div>
       <div class="row"><input id="dj-url" placeholder="…or paste a direct audio stream URL (https://)"></div>
+      <div class="row"><input id="dj-spotify" placeholder="…or paste a Spotify track / album / playlist link"></div>
       <div class="row">
         <button id="dj-play-file" class="btn-primary">▶ Play file</button>
         <button id="dj-play-url" class="btn-primary">▶ Play URL</button>
+        <button id="dj-play-spotify" class="btn-primary">▶ Play Spotify</button>
         <button id="dj-play-tab" class="btn-primary">▶ Share tab audio</button>
         <button id="dj-stop" class="btn-danger">⏹ Cut it</button>
       </div>
       <div class="row">Volume <input type="range" id="dj-volume" min="0" max="100" value="80"></div>
       <p class="fineprint">File mode streams your audio to everyone over WebRTC. URL mode has each listener play the stream directly.</p>
+      <p class="fineprint">Spotify mode: you pick the track, everyone taps play on the Spotify card to tune in (listeners need Spotify). You control it — they just listen.</p>
       <p class="fineprint">Tab audio: play Spotify/YouTube in another browser tab, then pick that tab and tick "Share tab audio". Don't share this CamWave tab. (Desktop Chrome/Edge.)</p>
       <div class="modal-actions"><button id="dj-close" class="btn-ghost">Close</button></div>
     </div>
+  </div>
+
+  <!-- ===== SPOTIFY DJ NOW-PLAYING CARD ===== -->
+  <div id="spotify-dj-card" class="hidden">
+    <div id="spotify-dj-head">🎧 <span id="spotify-dj-by"></span> is DJing <button id="spotify-dj-hide" title="Hide for me">–</button></div>
+    <div class="fineprint" style="margin:2px 0 6px">Tap play to tune in</div>
+    <div id="spotify-dj-embed"></div>
   </div>
 
   <!-- ===== USER ACTION POPUP ===== -->

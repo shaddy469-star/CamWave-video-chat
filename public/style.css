@@ -945,3 +945,20 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
   height: 100%; width: 0%; background: var(--good);
   border-radius: 6px; transition: width .08s;
 }
+
+/* ===== Spotify DJ now-playing card ===== */
+#spotify-dj-card {
+  position: fixed; left: 12px; right: 12px; bottom: 92px; z-index: 60;
+  max-width: 430px; margin: 0 auto;
+  background: #121212; border: 1px solid #1db954; border-radius: 14px;
+  padding: 10px 12px 12px; box-shadow: 0 8px 30px rgba(0,0,0,.55);
+  color: #fff;
+}
+#spotify-dj-head { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+#spotify-dj-hide {
+  margin-left: auto; width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid #333; background: #1e1e1e; color: #fff;
+  font-size: 16px; line-height: 1; cursor: pointer;
+}
+#spotify-dj-card .fineprint { color: #b3b3b3; }
+#spotify-dj-embed iframe { display: block; }

@@ -446,6 +446,11 @@ function onRoomJoined(m) {
   S.room = m.room;
   S.roomUsers = new Map(m.users.map(u => [u.id, u]));
   S.selfMuted = m.selfMuted;
+  stopDjLocal(); // clear any DJ state from the previous room
+  const rdj = m.room && m.room.dj;
+  if (rdj && rdj.active && rdj.mode === 'spotify' && rdj.spotifyId) {
+    startDjSpotify(rdj.spotifyType, rdj.spotifyId, rdj.by); // late joiner tunes in
+  }
   renderGiftGoal(m.giftGoal || null);
   $('view-lobby').classList.add('hidden');
   $('view-room').classList.remove('hidden');
@@ -1799,7 +1804,6 @@ $('siteowner-btn').onclick = () => {
   const b = S.siteBanner || {};
   $('sb-title').value = b.title || '';
   $('sb-body').value = b.body || '';
-    
   $('sb-contact').value = b.contact || '';
   $('sitebanner-modal').classList.remove('hidden');
 };
@@ -2495,6 +2499,9 @@ function onDjMsg(m) {
     addSysMsg(`🎧 ${m.by} is DJing their tab audio (e.g. Spotify).`);
     S.dj.active = true; S.dj.mode = 'tab-remote'; S.dj.by = m.by;
     toast('🎧 ' + m.by + ' is DJing — listen for their audio track.');
+  } else if (m.action === 'start-spotify') {
+    startDjSpotify(m.spotifyType, m.spotifyId, m.by);
+    addSysMsg(`🎧 ${m.by} started DJing Spotify — tap play on the card to tune in.`);
   } else if (m.action === 'stop') {
     stopDjLocal();
     addSysMsg('🎧 DJ stopped.');
@@ -2531,6 +2538,42 @@ function startDjUrl(url, by) {
   audio.volume = ($('dj-volume').value | 0) / 100;
   audio.play().catch(() => toast('Could not play that stream URL.'));
   S.dj = { active: true, mode: 'url', audio, url, track: null, stream: null, by };
+}
+/* ---- Spotify DJ: owner picks the music, everyone tunes in ----
+   Spotify is DRM-locked so true broadcast is impossible; instead each
+   phone plays the track through Spotify's own embed, started together
+   by the owner's pick. The owner is the only one who can change it. */
+function parseSpotifyLink(input) {
+  const s = String(input || '').trim();
+  let m = s.match(/^spotify:(track|album|playlist|episode|show|artist):([A-Za-z0-9]{22})$/i);
+  if (m) return { type: m[1].toLowerCase(), id: m[2] };
+  m = s.match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]{22})(?:[\/?#]|$)/i);
+  if (m) return { type: m[1].toLowerCase(), id: m[2] };
+  return null;
+}
+function startDjSpotify(spotifyType, spotifyId, by) {
+  if (!spotifyType || !/^[A-Za-z0-9]{22}$/.test(spotifyId || '')) return;
+  stopDjLocal();
+  const wrap = $('spotify-dj-embed');
+  wrap.innerHTML = '';
+  const fr = document.createElement('iframe');
+  fr.src = `https://open.spotify.com/embed/${spotifyType}/${spotifyId}?utm_source=generator&theme=0`;
+  fr.width = '100%';
+  fr.height = (spotifyType === 'track' || spotifyType === 'episode') ? '152' : '252';
+  fr.frameBorder = '0';
+  fr.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+  fr.loading = 'lazy';
+  fr.style.borderRadius = '12px';
+  wrap.appendChild(fr);
+  $('spotify-dj-by').textContent = by || 'Someone';
+  $('spotify-dj-card').classList.remove('hidden');
+  S.dj = { active: true, mode: 'spotify', audio: null, url: null, track: null, stream: null,
+           spotifyType, spotifyId, by };
+  toast('🎧 Tap play on the Spotify card to tune in.');
+}
+function hideSpotifyCard() {
+  const card = $('spotify-dj-card');
+  if (card) { card.classList.add('hidden'); const w = $('spotify-dj-embed'); if (w) w.innerHTML = ''; }
 }
 async function djPlayTab() {
   // Share another browser tab's audio (Spotify web player, YouTube, …) with the room.
@@ -2572,6 +2615,7 @@ async function djPlayTab() {
   toast('🎧 You are now DJing your tab audio for the room!');
 }
 function stopDjLocal() {
+  hideSpotifyCard();
   if (S.dj.audio) { try { S.dj.audio.pause(); } catch {} }
   if (S.dj.track) {
     for (const [, p] of S.peers) {
@@ -2584,6 +2628,14 @@ function stopDjLocal() {
 }
 $('dj-play-file').onclick = djPlayFile;
 $('dj-play-tab').onclick = djPlayTab;
+$('dj-play-spotify').onclick = () => {
+  const parsed = parseSpotifyLink($('dj-spotify').value);
+  if (!parsed) return toast('Paste a Spotify track, album, or playlist link.');
+  startDjSpotify(parsed.type, parsed.id, S.myName);
+  wsSend({ type: 'dj', action: 'start-spotify', spotifyType: parsed.type, spotifyId: parsed.id });
+  $('dj-modal').classList.add('hidden');
+};
+$('spotify-dj-hide').onclick = () => $('spotify-dj-card').classList.add('hidden'); // minimize for me only
 $('dj-play-url').onclick = () => {
   const url = $('dj-url').value.trim();
   if (!/^https?:\/\//i.test(url)) return toast('Paste a valid http(s) audio URL.');
