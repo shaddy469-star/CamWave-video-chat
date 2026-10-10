@@ -2005,7 +2005,7 @@ function handleMessage(ws, raw) {
     }
     case 'dj': {
       // DJ mode: mute everyone except staff so nobody talks over the music
-      if ((msg.action === 'start-url' || msg.action === 'start-file' || msg.action === 'start-tab') && u.siteOwner) {
+      if ((msg.action === 'start-url' || msg.action === 'start-file' || msg.action === 'start-tab' || msg.action === 'start-spotify') && u.siteOwner) {
         for (const m of roomUsers(u.roomId)) {
           if (m.id === u.id || m.siteOwner || rankOf(rooms.get(u.roomId), m.id) >= 1) continue;
           if (!m.muted) {
@@ -2043,6 +2043,18 @@ function handleMessage(ws, raw) {
         room.dj = { active: true, mode: 'tab', url: null, volume: 1, by: u.name };
         broadcastRoom(room.id, { type: 'dj', action: 'start-tab', by: u.name }, u.id);
         send(ws, { type: 'dj', action: 'you-are-dj' });
+      } else if (msg.action === 'start-spotify') {
+        // Owner DJs a Spotify track/album/playlist: every client renders a
+        // Spotify embed and tunes in. Each phone plays Spotify itself (DRM),
+        // but the owner picks the music and controls it for the room.
+        const spotifyType = String(msg.spotifyType || '').toLowerCase();
+        const spotifyId = String(msg.spotifyId || '');
+        if (!['track', 'album', 'playlist', 'episode', 'show', 'artist'].includes(spotifyType))
+          return send(ws, { type: 'error', message: 'That Spotify link did not parse.' });
+        if (!/^[A-Za-z0-9]{22}$/.test(spotifyId))
+          return send(ws, { type: 'error', message: 'That Spotify link did not parse.' });
+        room.dj = { active: true, mode: 'spotify', spotifyType, spotifyId, volume: 1, by: u.name };
+        broadcastRoom(room.id, { type: 'dj', action: 'start-spotify', spotifyType, spotifyId, by: u.name });
       } else if (msg.action === 'volume') {
         const v = Math.max(0, Math.min(1, Number(msg.volume)));
         room.dj.volume = v;
