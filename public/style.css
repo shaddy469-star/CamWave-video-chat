@@ -840,8 +840,10 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.3px; }
   .user-list { max-height: 200px; }
   .user-row { font-size: .88em; padding: 8px; }
 
-  /* chat */
-  .chat-log { height: 220px; }
+  /* chat: jump to top of the side column on phones, tall enough to read */
+  .side-col { display: flex; flex-direction: column; }
+  .chat-panel { order: -1; }
+  .chat-log { height: 38vh; min-height: 240px; }
   .chat-input-row { gap: 6px; }
   .chat-input-row .btn-ghost { padding: 10px; }
   #chat-input { font-size: 16px; } /* stops iOS zoom-on-focus */
