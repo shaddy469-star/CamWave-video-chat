@@ -2521,7 +2521,7 @@ function onDjMsg(m) {
 
 async function djPlayFile() {
   const f = $('dj-file').files[0];
-  if (!f) return toast('Pick an audio file first.');
+  if (!f) { banner('Pick an audio file first.'); return; }
   stopDjLocal();
   const audio = new Audio(URL.createObjectURL(f));
   audio.volume = ($('dj-volume').value | 0) / 100;
@@ -2530,7 +2530,7 @@ async function djPlayFile() {
   try {
     stream = audio.captureStream ? audio.captureStream() : audio.mozCaptureStream();
     track = stream.getAudioTracks()[0];
-  } catch (e) { return toast('This browser cannot share audio from a file.'); }
+  } catch (e) { banner('This browser cannot share audio from a file.'); return; }
   S.dj = { active: true, mode: 'file', audio, url: null, track, stream, by: S.myName };
   // add track to all current peer connections (renegotiation follows automatically)
   for (const [, p] of S.peers) {
@@ -2638,7 +2638,7 @@ function hideYoutubeCard() {
 async function djPlayTab() {
   // Share another browser tab's audio (Spotify web player, YouTube, …) with the room.
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia)
-    return toast('Tab audio share is not supported in this browser.');
+    banner('Tab audio share is not supported in this browser.'); return;
   stopDjLocal();
   let disp;
   try {
@@ -2647,7 +2647,7 @@ async function djPlayTab() {
   const srcTracks = disp.getAudioTracks();
   if (!srcTracks.length) {
     disp.getTracks().forEach(t => { try { t.stop(); } catch {} });
-    return toast('No audio in that share — pick the music tab and tick "Share tab audio".');
+    banner('No audio in that share — pick the music tab and tick "Share tab audio".'); return;
   }
   // Route through a gain node so the DJ volume slider works.
   let stream = disp, track = srcTracks[0], gainNode = null, audioCtx = null;
@@ -2691,7 +2691,7 @@ $('dj-play-file').onclick = djPlayFile;
 $('dj-play-tab').onclick = djPlayTab;
 $('dj-play-spotify').onclick = () => {
   const parsed = parseSpotifyLink($('dj-spotify').value);
-  if (!parsed) return toast('Paste a Spotify track, album, or playlist link.');
+  if (!parsed) { banner('Paste a Spotify track, album, or playlist link.'); return; }
   startDjSpotify(parsed.type, parsed.id, S.myName);
   wsSend({ type: 'dj', action: 'start-spotify', spotifyType: parsed.type, spotifyId: parsed.id });
   $('dj-modal').classList.add('hidden');
@@ -2699,7 +2699,7 @@ $('dj-play-spotify').onclick = () => {
 $('spotify-dj-hide').onclick = () => $('spotify-dj-card').classList.add('hidden'); // minimize for me only
 $('dj-play-youtube').onclick = () => {
   const yid = parseYoutubeLink($('dj-youtube').value);
-  if (!yid) return toast('Paste a YouTube video link.');
+  if (!yid) { banner('Paste a YouTube video link.'); return; }
   startDjYoutube(yid, S.myName);
   wsSend({ type: 'dj', action: 'start-youtube', youtubeId: yid });
   $('dj-modal').classList.add('hidden');
@@ -2707,7 +2707,7 @@ $('dj-play-youtube').onclick = () => {
 $('youtube-dj-hide').onclick = () => hideYoutubeCard(); // minimize for me only (stops my playback)
 $('dj-play-url').onclick = () => {
   const url = $('dj-url').value.trim();
-  if (!/^https?:\/\//i.test(url)) return toast('Paste a valid http(s) audio URL.');
+  if (!/^https?:\/\//i.test(url)) { banner('Paste a valid http(s) audio URL.'); return; }
   startDjUrl(url, S.myName);
   wsSend({ type: 'dj', action: 'start-url', url });
   $('dj-modal').classList.add('hidden');
